@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const Joi = require("joi");
 const multer = require("multer");
-
+const db = require('../database/database');
 const store = require("../store/listings");
 const categoriesStore = require("../store/categories");
 const validateWith = require("../middleware/validation");
@@ -39,13 +39,6 @@ const validateCategoryId = (req, res, next) => {
 
   next();
 };
-
-router.get("/", (req, res) => {
-
-  const listings = store.getListings();
-  const resources = listings.map(listingMapper);
-  res.send(resources);
-});
 
 //Todo : understand the logic
 router.put(
@@ -98,8 +91,37 @@ router.put(
   }
 );
 
-router.post(
-  "/",
+
+
+
+
+// Get all listings
+router.get('/', (req, res) => {
+  const query = `
+    SELECT * FROM listings
+    LEFT JOIN images ON listings.id = images.listing_id
+  `;  db.all(query, [], (err, rows) => {
+    if (err) {
+      res.status(500).json({ error: err.message });
+    } else {
+    //after getting the rows, we map them to the format we want,
+    //  to sent them to the client
+      const resources = rows.map(listingMapper);
+      
+      res.send(resources);
+    }
+  });
+
+
+
+
+
+
+
+});
+
+// Add a new listing
+router.post('/',
   [
     //nb: Multer should come first to handle files
 
@@ -110,40 +132,65 @@ router.post(
     imageResize,
 
   ],
-  async (req, res) => {
-
+  
+  
+  (req, res) => {
 
     if (!req.files || req.files.length === 0) {
       return res.status(400).send({ error: "No images uploaded." });
     }
 
-    const listing = {
+    const images = req.files.map((file) => ({ fileName: file.filename }));
+
+
+    const LocationRecords = req.body.location ? JSON.stringify(req.body.location) : null;
+
+    const listingQuery = `
+      INSERT INTO listings (title, description, price, location, userId, categoryId)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `;
+
+    const listingData = {
       title: req.body.title,
-      price: parseFloat(req.body.price),
-      categoryId: parseInt(req.body.categoryId),
       description: req.body.description,
-      userId: parseInt(req.body.userId)
+      price: parseFloat(req.body.price),
+      location: LocationRecords,
+      userId: parseInt(req.body.userId),
+      categoryId: parseInt(req.body.categoryId),
     };
 
+    db.run(listingQuery, [listingData.title, listingData.description, listingData.price, listingData.location, listingData.userId, listingData.categoryId], function (err) {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
 
-    
-    listing.images = req.files.map((file) => ({ fileName: file.filename }));
+      const listingId = this.lastID;
 
-    listing.dateTime = Date.now();
-    
-    if (req.body.location) listing.location = req.body.location; // No need to parse the location if it's not provided
-    
-    
-    
+      const imageQuery = `
+        INSERT INTO images (listing_id, fileName)
+        VALUES (?, ?)
+      `;
 
+      const imageInserts = images.map((image) => {
+        return new Promise((resolve, reject) => {
+          db.run(imageQuery, [listingId, image.fileName], function (err) {
+            if (err) {
+              return reject(err);
+            }
+            resolve();
+          });
+        });
+      });
 
-
-
-    store.addListing(listing);
-
-    res.status(201).send(listing);
-  }
-);
-
+      Promise.all(imageInserts)
+        .then(() => {
+          res.status(201).json({ message: 'Listing and images added successfully' });
+        })
+        .catch((err) => {
+          res.status(500).json({ error: err.message });
+        });
+    });
+});
 
 module.exports = router;
+0
