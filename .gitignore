@@ -8,3 +8,6 @@ uploads/*
 
 jibwbie3.db
 debug.log
+node_modules/
+.env
+db.sqlite

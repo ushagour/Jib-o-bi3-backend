@@ -12,6 +12,7 @@ const helmet = require("helmet");
 const compression = require("compression");
 const config = require("config");
 const app = express();
+const { User, Category, Listing, Image, sequelize } = require('./models');
 
 app.use(express.static("public"));
 app.use(express.json());
@@ -28,7 +29,36 @@ app.use("/api/my_Listings", my_Listings);
 app.use("/api/expoPushTokens", expoPushTokens);
 app.use("/api/my_Notifications", my_Notifications);
 
+
+
+
+// Example: Create a new user
+async function createUser() {
+    const user = await User.create({
+        name: 'john_doe',
+        email: 'john@example.com',
+        password: 'password123',
+    });
+    console.log(user);
+}
+
+// Example: Fetch all listings with their images
+async function getListings() {
+    const listings = await Listing.findAll({
+        include: [{ model: Image }],
+    });
+    console.log(listings);
+}
+
+// Sync models with the database
+sequelize.sync().then(() => {
+    console.log('Database synced!');
+    // createUser();
+    getListings();
+});
+
 const port = process.env.PORT || config.get("port");
 app.listen(port, function() {
   console.log(`Server started on port ${port}...`);
 });
+
