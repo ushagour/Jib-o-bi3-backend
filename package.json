@@ -14,6 +14,7 @@
   "author": "Ali OUCHAGOUR",
   "license": "ISC",
   "dependencies": {
+    "bcrypt": "^5.1.1",
     "body-parser": "^1.20.2",
     "compression": "^1.7.4",
     "config": "^3.3.9",
@@ -23,6 +24,7 @@
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.1",
     "multer": "^1.4.5-lts.1",
+    "sequelize": "^6.37.5",
     "sharp": "^0.32.1",
     "sqlite3": "^5.1.7"
   },

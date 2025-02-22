@@ -11,15 +11,15 @@ const listingMapper = require("../mappers/listings");
 
 router.get("/", auth, (req, res) => {
   
-  const user = users.getUserById(req.user.userId);
+  // const user = users.getUserById(req.user.userId);
 
 
 
-  const listings = listingsStore.filterListings(
-    listing => listing.userId == user.id
-  );
-  const resources = listings.map(listingMapper);
-  res.send(resources);
+  // const listings = listingsStore.filterListings(
+  //   listing => listing.userId == user.id
+  // );
+  // const resources = listings.map(listingMapper);
+  // res.send(resources);
 });
 
 

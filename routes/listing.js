@@ -12,4 +12,7 @@ router.get("/:id", auth, (req, res) => {
   res.send(resource);
 });
 
+
+
+
 module.exports = router;

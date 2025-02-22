@@ -1,32 +1,19 @@
 const express = require("express");
+const { Categories } = require("../models");
 const router = express.Router();
-const db = require('../database/database');
 
-router.get("/", (req, res) => {
-  db.all("SELECT * FROM categories", [], (err, rows) => {
-    if (err) {
-      console.error("Error fetching categories:", err);
-      res.status(500).send("Internal Server Error");
-      return;
-    }
-    res.send(rows);
-  });
+router.get("/", async(req, res) => {
+  try {
+    const listings = await Categories.findAll();
+    res.status(200).json(listings);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 router.get("/:id", (req, res) => {
   const id = req.params.id;
-  db.get("SELECT * FROM categories WHERE id = ?", [id], (err, row) => {
-    if (err) {
-      console.error("Error fetching category:", err);
-      res.status(500).send("Internal Server Error");
-      return;
-    }
-    if (!row) {
-      res.status(404).send("Category not found");
-      return;
-    }
-    res.send(row);
-  });
+
 });
 
 module.exports = router;

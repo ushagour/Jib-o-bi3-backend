@@ -2,15 +2,17 @@ const express = require("express");
 const router = express.Router();
 const Joi = require("joi");
 const multer = require("multer");
-const db = require('../database/database');
-const store = require("../store/listings");
-const categoriesStore = require("../store/categories");
+const categoriesStore = require("../routes/categories");
 const validateWith = require("../middleware/validation");
 const auth = require("../middleware/auth");
 const imageResize = require("../middleware/imageResize");
 const delay = require("../middleware/delay");
 const listingMapper = require("../mappers/listings");
 const config = require("config");
+
+
+
+const Listings = require('../models/Listing');
 
 const upload = multer({
   dest: "uploads/",
@@ -33,20 +35,19 @@ const schema = Joi.object({
 
 
 
-const validateCategoryId = (req, res, next) => {
-  if (!categoriesStore.getCategory(parseInt(req.body.categoryId)))
-    return res.status(400).send({ error: "Invalid categoryId." });
+// const validateCategoryId = (req, res, next) => {//to added it later 
+//   if (!categoriesStore.getCategory(parseInt(req.body.categoryId)))
+//     return res.status(400).send({ error: "Invalid categoryId." });
+//   next();
+// };
+// update listings
 
-  next();
-};
-
-//Todo : understand the logic
 router.put(
   "/:id",
   [
     upload.array("images", config.get("maxImageCount")), // Handle file uploads
     validateWith(schema), // Validate incoming data
-    validateCategoryId, // Ensure categoryId is valid
+    // validateCategoryId, // Ensure categoryId is valid
     imageResize, // Resize images if provided
   ], auth, 
   async (req, res) => {
@@ -76,7 +77,6 @@ router.put(
     if (req.files && req.files.length > 0) {
       updatedListing.images = req.files.map((file) => ({ fileName: file.filename }));
     }
-
     // Update location if provided
     if (req.body.location) {
       updatedListing.location = req.body.location;
@@ -91,106 +91,26 @@ router.put(
   }
 );
 
-
-
-
-
 // Get all listings
 router.get('/', (req, res) => {
-  const query = `
-    SELECT * FROM listings
-    LEFT JOIN images ON listings.id = images.listing_id
-  `;  db.all(query, [], (err, rows) => {
-    if (err) {
-      res.status(500).json({ error: err.message });
-    } else {
-    //after getting the rows, we map them to the format we want,
-    //  to sent them to the client
-      const resources = rows.map(listingMapper);
-      
-      res.send(resources);
-    }
-  });
-
-
-
-
-
-
-
+ 
 });
 
-// Add a new listing
-router.post('/',
-  [
-    //nb: Multer should come first to handle files
-
-    upload.array("images", config.get("maxImageCount")),
-    // Validation middleware comes after multer
-    validateWith(schema),
-    validateCategoryId,
-    imageResize,
-
-  ],
-  
-  
-  (req, res) => {
-
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).send({ error: "No images uploaded." });
-    }
-
-    const images = req.files.map((file) => ({ fileName: file.filename }));
 
 
-    const LocationRecords = req.body.location ? JSON.stringify(req.body.location) : null;
 
-    const listingQuery = `
-      INSERT INTO listings (title, description, price, location, userId, categoryId)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `;
 
-    const listingData = {
-      title: req.body.title,
-      description: req.body.description,
-      price: parseFloat(req.body.price),
-      location: LocationRecords,
-      userId: parseInt(req.body.userId),
-      categoryId: parseInt(req.body.categoryId),
-    };
 
-    db.run(listingQuery, [listingData.title, listingData.description, listingData.price, listingData.location, listingData.userId, listingData.categoryId], function (err) {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
 
-      const listingId = this.lastID;
 
-      const imageQuery = `
-        INSERT INTO images (listing_id, fileName)
-        VALUES (?, ?)
-      `;
-
-      const imageInserts = images.map((image) => {
-        return new Promise((resolve, reject) => {
-          db.run(imageQuery, [listingId, image.fileName], function (err) {
-            if (err) {
-              return reject(err);
-            }
-            resolve();
-          });
-        });
-      });
-
-      Promise.all(imageInserts)
-        .then(() => {
-          res.status(201).json({ message: 'Listing and images added successfully' });
-        })
-        .catch((err) => {
-          res.status(500).json({ error: err.message });
-        });
-    });
+router.get('/test', async (req, res) => {
+  try {
+    const listings = await Listings.findAll();
+    res.status(200).json(listings);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
+
 
 module.exports = router;
-0
