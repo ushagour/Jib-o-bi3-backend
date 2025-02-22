@@ -13,6 +13,7 @@ const compression = require("compression");
 const config = require("config");
 const app = express();
 const { User, Category, Listing, Image, sequelize } = require('./models');
+const bcrypt = require("bcrypt");
 
 app.use(express.static("public"));
 app.use(express.json());
@@ -37,7 +38,7 @@ async function createUser() {
     const user = await User.create({
         name: 'john_doe',
         email: 'john@example.com',
-        password: 'password123',
+        password:  bcrypt.hashSync('password123', 10), 
     });
     console.log(user);
 }
@@ -45,7 +46,7 @@ async function createUser() {
 // Example: Fetch all listings with their images
 async function getListings() {
     const listings = await Listing.findAll({
-        include: [{ model: Image }],
+        include: [{ model: Image, as: 'images' }], // Use the same alias 'images'
     });
     console.log(listings);
 }

@@ -4,6 +4,8 @@ CREATE TABLE Categories (
     name TEXT NOT NULL,
     icon TEXT,
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+            updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+
 );
 
 -- Users Table  
@@ -13,6 +15,8 @@ CREATE TABLE Users (
     email TEXT NOT NULL UNIQUE,
     password TEXT NOT NULL,
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+
 );
 
 
@@ -50,6 +54,8 @@ CREATE TABLE Messages (
     listing_id INTEGER NOT NULL,
     content TEXT NOT NULL,
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+
     FOREIGN KEY (sender_id) REFERENCES Users(id),
     FOREIGN KEY (receiver_id) REFERENCES Users(id),
     FOREIGN KEY (listing_id) REFERENCES Listings(id)
@@ -61,6 +67,8 @@ CREATE TABLE Favorites (
     user_id INTEGER NOT NULL,
     listing_id INTEGER NOT NULL,
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+
     FOREIGN KEY (user_id) REFERENCES Users(id),
     FOREIGN KEY (listing_id) REFERENCES Listings(id)
 );
@@ -73,6 +81,8 @@ CREATE TABLE Reviews (
     rating INTEGER NOT NULL,
     comment TEXT,
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+
     FOREIGN KEY (listing_id) REFERENCES Listings(id),
     FOREIGN KEY (user_id) REFERENCES Users(id)
 );
