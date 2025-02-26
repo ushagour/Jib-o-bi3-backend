@@ -13,8 +13,8 @@ Listing.belongsTo(User, { foreignKey: 'user_id' });
 Category.hasMany(Listing, { foreignKey: 'category_id' });
 Listing.belongsTo(Category, { foreignKey: 'category_id' });
 
-Listing.hasMany(Image, { foreignKey: 'listing_id', as: 'images' }); // Use 'as: images'
-Image.belongsTo(Listing, { foreignKey: 'listing_id', as: 'listing' });
+Listing.hasMany(Image, { foreignKey: 'listing_id' }); // Use 'as: images'
+Image.belongsTo(Listing, { foreignKey: 'listing_id' });
 
 // Export models and Sequelize instance
 module.exports = {

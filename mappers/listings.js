@@ -1,32 +1,26 @@
-
 const config = require("config");
 
-/*
-The role of the mapper in the listings.js
- mapper file is to transform listing objects by modifying their image URLs. Specifically, it takes a listing object,
- processes its images, and returns a new listing object with updated image URLs.
- The URLs are constructed using a base URL from the configuration and appending the image file names with 
- specific suffixes for full and thumbnail versions.
- This ensures that the listing objects have properly formatted image URLs for use in the application.*/
 const mapper = listing => {
-  
   const baseUrl = config.get("assetsBaseUrl");
 
-  const mapImage = fileName => ({
-    url: `${baseUrl}${fileName}_full.jpg`,
-    thumbnailUrl: `${baseUrl}${fileName}_thumb.jpg`
+  const mapImage = image => ({
+    url: `${baseUrl}${image.file_name}_full.jpg`,
+    thumbnailUrl: `${baseUrl}${image.file_name}_thumb.jpg`
   });
-  
 
- const images = mapImage(listing.fileName);
- 
- 
-return {
-    ...listing,
-    images
+  return {
+    id: listing.id,
+    title: listing.title,
+    description: listing.description,
+    price: `$${listing.price}`,
+    imageUrl: listing.Images.length > 0 ? mapImage(listing.Images[0]).url : null,
+    thumbnailUrl: listing.Images.length > 0 ? mapImage(listing.Images[0]).thumbnailUrl : null,
+    ownerName: listing.User ? listing.User.name : null, // Use the owner's name if available} : null,
+    latitude: listing.latitude,
+    longitude: listing.longitude,
+    status: listing.status,
+    createdAt: listing.createdAt,
   };
-  
 };
 
 module.exports = mapper;
-

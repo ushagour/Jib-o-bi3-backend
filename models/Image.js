@@ -10,7 +10,11 @@ const Image = sequelize.define('Image', {
     listing_id: {
         type: DataTypes.INTEGER,
         allowNull: false,
-    },
+        references: {
+          model: 'Listing',
+          key: 'listing_id',
+        },
+      },
     file_name: {
         type: DataTypes.STRING,
         allowNull: false,

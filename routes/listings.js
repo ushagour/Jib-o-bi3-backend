@@ -8,6 +8,9 @@ const auth = require("../middleware/auth");
 const imageResize = require("../middleware/imageResize");
 const delay = require("../middleware/delay");
 const listingMapper = require("../mappers/listings");
+const Listing = require("../models/Listing");
+const Image = require("../models/Image");
+const User = require("../models/User");
 const config = require("config");
 
 
@@ -92,25 +95,31 @@ router.put(
 );
 
 // Get all listings
-router.get('/', (req, res) => {
- 
-});
 
 
 
 
 
-
-
-
-router.get('/test', async (req, res) => {
+router.get("/", async(req, res) => {
   try {
-    const listings = await Listings.findAll();
+    const listings = await Listings.findAll({
+      include: [
+        {
+          model: Image,
+          attributes: ['file_name'], // Include only the file_name attribute
+        },
+        {
+          model: User,
+          attributes: ['name'], // Include only the name attribute
+        }
+      ],
+    });
+
+    const resources = listings.map(listingMapper);
     res.status(200).json(listings);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
-
 
 module.exports = router;
