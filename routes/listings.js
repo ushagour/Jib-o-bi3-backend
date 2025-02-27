@@ -116,7 +116,7 @@ router.get("/", async(req, res) => {
     });
 
     const resources = listings.map(listingMapper);
-    res.status(200).json(listings);
+    res.status(200).json(resources);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
