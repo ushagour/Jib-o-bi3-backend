@@ -2,35 +2,49 @@ const express = require("express");
 const router = express.Router();
 
 const listingsStore = require("../store/listings");
-const users = require("../store/users");
 const auth = require("../middleware/auth");
 const listingMapper = require("../mappers/listings");
 
+const Listing = require("../models/Listing");
+const Image = require("../models/Image");
+const User = require("../models/User");
 
 
-
-router.get("/", auth, (req, res) => {
+router.get("/", async (req, res) => {
   
-  // const user = users.getUserById(req.user.userId);
+  try {
+    
+    
+    const myListing = await Listing.findAll( { where: { user_id: req.query.userId },
+    
+      include: [
+        {
+          model: Image,
+          attributes: ['file_name'], // Include only the file_name attribute
+        }
+      ],
+    });
+  
+    const resources = myListing.map(listingMapper);
+    
+    res.status(200).json(resources);
+
+  } 
+    catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+  
 
 
-
-  // const listings = listingsStore.filterListings(
-  //   listing => listing.userId == user.id
-  // );
-  // const resources = listings.map(listingMapper);
-  // res.send(resources);
 });
 
 
 router.delete("/:id", auth, (req, res) => {
   const listingId = parseInt(req.params.id); // Extract the ID from the URL
   console.log("Deleting listing with ID:", listingId);
+  Listing.delete({ where: { id: listingId } });//TODO delete listing from database
 
-  const listing = listingsStore.getListing(listingId); // Retrieve the listing by ID
-  if (!listing) return res.status(404).send({ error: "Listing not found." });
 
-  listingsStore.deleteListing(listingId); // Delete the listing
 
   res.send({ message: "Listing deleted successfully." });
 });
