@@ -8,9 +8,7 @@ const auth = require("../middleware/auth");
 const imageResize = require("../middleware/imageResize");
 const delay = require("../middleware/delay");
 const listingMapper = require("../mappers/listings");
-const Listing = require("../models/Listing");
-const Image = require("../models/Image");
-const User = require("../models/User");
+const { Listing, Image,User,Favorites,Reviews,Messages } = require("../models");//
 const config = require("config");
 
 
@@ -94,12 +92,20 @@ router.put(
   }
 );
 
+
+// router.get("/:id", auth, (req, res) => {
+//   const listing = store.getListing(parseInt(req.params.id));
+//   if (!listing) return res.status(404).send();
+//   const resource = listingMapper(listing);
+//   res.send(resource);
+// });
+
+
+
+
+
+
 // Get all listings
-
-
-
-
-
 router.get("/", async(req, res) => {
   try {
     const listings = await Listings.findAll({
@@ -118,6 +124,65 @@ router.get("/", async(req, res) => {
     const resources = listings.map(listingMapper);
     res.status(200).json(resources);
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+
+router.get("/my_Listings", async (req, res) => {
+  
+  try {
+    
+    
+    const myListing = await Listing.findAll( { where: { user_id: req.query.userId },
+    
+      include: [
+        {
+          model: Image,
+          attributes: ['file_name'], // Include only the file_name attribute
+        }
+      ],
+    });
+  
+    const resources = myListing.map(listingMapper);
+    
+    res.status(200).json(resources);
+
+  } 
+    catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+// Delete a listing
+// Delete a listing
+router.delete("/:id", async (req, res) => {
+  const listing_id = parseInt(req.params.id); // Extract the ID from the URL
+
+  try {
+    const listing = await Listing.findByPk(listing_id, {
+      include: [Image,Favorites,Reviews,Messages], // Include associated images
+    });
+    if (!listing) {
+      console.log("Listing not found");
+      return res.status(404).send({ error: "Listing not found." });
+    }
+
+    
+    // Delete records in other associated tables
+    await Image.destroy({ where: { listing_id: listing.id } });
+    await Favorites.destroy({ where: { listing_id: listing.id } });
+    await Reviews.destroy({ where: { listing_id: listing.id } });
+    await Messages.destroy({ where: { listing_id: listing.id } });
+
+    // Delete the listing from the database
+    await listing.destroy();
+    console.log("Listing deleted successfully");
+    res.send({ message: "Listing deleted successfully." });
+  } catch (error) {
+    console.error("Error deleting listing:", error);
     res.status(500).json({ error: error.message });
   }
 });
