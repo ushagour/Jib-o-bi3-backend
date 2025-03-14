@@ -3,12 +3,12 @@ const router = express.Router();
 const Joi = require("joi");
 const { Expo } = require("expo-server-sdk");
 
-const usersStore = require("../store/users");
-const listingsStore = require("../store/listings");
-const myNotificationsStore = require("../store/myNotifications");
 const sendPushNotification = require("../utilities/pushNotifications");
 const auth = require("../middleware/auth");
 const validateWith = require("../middleware/validation");
+const { Listing, Image,User,Favorites,Reviews,Messages } = require("../models");//
+const c = require("config");
+
 
 const schema = Joi.object({
   listingId: Joi.number().required(),
@@ -17,26 +17,44 @@ const schema = Joi.object({
 const expo = new Expo();
 
 
-router.get("/", auth, (req, res) => {
-  
-  const myNotification = myNotificationsStore.getMessagesForUser(req.user.userId);
+router.get("/",auth, async(req, res) => {
+  try {
+  const user_id = req.user.userId; // Use req.user.userId to get the user ID from the token
+  const myNotification = await Messages.findAll({where: {sender_id:user_id}, include: [   {
+    model: User,
+  },{
+    model:
+    Listing,
+  }]});
 
-  const mapUser = (userId) => {
-    const user = usersStore.getUserById(userId);
-    return { id: user.id, name: user.name, avatar: user.avatar };
-  };
 
-  const resources = myNotification.map((message) => ({
-    id: message.id,
-    listingId: message.listingId,
-    dateTime: message.dateTime,
-    content: message.content,
-    fromUser: mapUser(message.fromUserId),
-    toUser: mapUser(message.toUserId),
-  }));
+// /* it's a good practice to map the user id to the user objec*/
+//   const mapUser = (userId) => {
+//     const user = usersStore.getUserById(userId);
+//     return { id: user.id, name: user.name, avatar: user.avatar };
+//   };
+
+
+  const resources = myNotification.map((message) => { 
+    return {
+      id: message.id,
+      fromUser: message.User.name,
+      content: message.content,
+      avatar: message.User.avatar,
+      listing_id: message.Listing.id, // Convert listing object to array
+      createdAt: message.createdAt,
+    };
+  }
+  );
+  if (!myNotification.length) return res.status(404).send({ error: "Messages not found." });
 
   res.send(resources);
-});
+} catch (error) {
+  console.error("Error fetching notifications:", error);
+  res.status(500).send({ error: "An error occurred while fetching notifications." });
+}
+}
+);
 
 router.post("/", [auth, validateWith(schema)], async (req, res) => {
   // console.log(auth);
