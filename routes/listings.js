@@ -8,10 +8,8 @@ const auth = require("../middleware/auth");
 const imageResize = require("../middleware/imageResize");
 const delay = require("../middleware/delay");
 const listingMapper = require("../mappers/listings");
-const { Listing, Image,User,Favorites,Reviews,Messages } = require("../models");//
+const { Listing, Image, User, Favorites, Reviews, Messages } = require("../models");
 const config = require("config");
-
-
 
 const Listings = require('../models/Listing');
 
@@ -19,7 +17,6 @@ const upload = multer({
   dest: "uploads/",
   limits: { fieldSize: 25 * 1024 * 1024 },
 });
-
 
 // Update the schema to be compatible with Joi v16+
 const schema = Joi.object({
@@ -34,15 +31,7 @@ const schema = Joi.object({
   }).optional(),
 });
 
-
-
-// const validateCategoryId = (req, res, next) => {//to added it later 
-//   if (!categoriesStore.getCategory(parseInt(req.body.categoryId)))
-//     return res.status(400).send({ error: "Invalid categoryId." });
-//   next();
-// };
-// update listings
-
+// Update listing
 router.put(
   "/:id",
   [
@@ -93,12 +82,6 @@ router.put(
 );
 
 
-// router.get("/:id", auth, (req, res) => {
-//   const listing = store.getListing(parseInt(req.params.id));
-//   if (!listing) return res.status(404).send();
-//   const resource = listingMapper(listing);
-//   res.send(resource);
-// });
 
 
 
@@ -128,15 +111,56 @@ router.get("/", async(req, res) => {
   }
 });
 
+// Get a single listing NB AUTH
+router.get("/detail/:id",auth, async (req, res) => {
 
-
-router.get("/my_Listings", async (req, res) => {
-  
   try {
+    const listing = await Listings.findOne({
+      where: { id: req.params.id },
+      include: [
+        {
+          model: Image,
+          attributes: ['file_name'], // Include only the file_name attribute
+        },
+        {
+          model: User,
+          // attributes: ['name'], // Include only the name attribute
+        },
+        {
+          model: Favorites,
+          attributes: ['user_id'], // Include only the user_id attribute
+        },
+        {
+          model: Reviews,
+          attributes: ['comment', 'rating'], // Include content and rating attributes
+        },
+        {
+          model: Messages,
+          attributes: ['content', 'sender_id', 'receiver_id'], // Include content, sender_id, and receiver_id attributes
+        },
+      ],
+    });
+    //cheacks if the listing is existent in the database
+    if (!listing) {
+      console.log("Listing not found");
+      return res.status(404).send({ error: "Listing not found." });
+    }
+
+    const resources = listingMapper(listing);
     
-    
-    const myListing = await Listing.findAll( { where: { user_id: req.query.userId },
-    
+    res.status(200).json(resources);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+
+// Get my listings 
+router.get("/my_listings",auth, async (req, res) => {
+  try {
+    const myListing = await Listing.findAll({
+      where: { user_id: req.query.userId },
       include: [
         {
           model: Image,
@@ -144,33 +168,27 @@ router.get("/my_Listings", async (req, res) => {
         }
       ],
     });
-  
-    const resources = myListing.map(listingMapper);
-    
-    res.status(200).json(resources);
 
-  } 
-    catch (error) {
+    const resources = myListing.map(listingMapper);
+    res.status(200).json(resources);
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
 
 // Delete a listing
-// Delete a listing
 router.delete("/:id", async (req, res) => {
   const listing_id = parseInt(req.params.id); // Extract the ID from the URL
 
   try {
     const listing = await Listing.findByPk(listing_id, {
-      include: [Image,Favorites,Reviews,Messages], // Include associated images
+      include: [Image, Favorites, Reviews, Messages], // Include associated images
     });
     if (!listing) {
-      console.log("Listing not found");
       return res.status(404).send({ error: "Listing not found." });
     }
 
-    
     // Delete records in other associated tables
     await Image.destroy({ where: { listing_id: listing.id } });
     await Favorites.destroy({ where: { listing_id: listing.id } });
@@ -179,10 +197,8 @@ router.delete("/:id", async (req, res) => {
 
     // Delete the listing from the database
     await listing.destroy();
-    console.log("Listing deleted successfully");
     res.send({ message: "Listing deleted successfully." });
   } catch (error) {
-    console.error("Error deleting listing:", error);
     res.status(500).json({ error: error.message });
   }
 });
