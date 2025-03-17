@@ -21,15 +21,64 @@ const upload = multer({
 // Update the schema to be compatible with Joi v16+
 const schema = Joi.object({
   title: Joi.string().required(),
-  userId: Joi.required(),
+  user_id: Joi.required(),
   description: Joi.string().allow(""),
   price: Joi.number().required().min(1),
-  categoryId: Joi.string().required(),
+  category_id: Joi.string().required(),
   location: Joi.object({
     latitude: Joi.number().required(),
     longitude: Joi.number().required(),
   }).optional(),
 });
+
+// Create a new listing
+router.post(
+  "/",
+  [
+    upload.array("images", config.get("maxImageCount")), // Handle file uploads
+    validateWith(schema), // Validate incoming data
+    // validateCategoryId, // Ensure categoryId is valid
+    imageResize, // Resize images if provided
+  ], auth, 
+  async (req, res) => {
+    try {
+      const { title, user_id, description, price, category_id, location } = req.body;
+
+      // Create the listing
+      const listing = await Listing.create({
+        title,
+        user_id,
+        description,
+        price,
+        category_id,
+        latitude : location.latitude,
+        longitude : location.longitude,
+      });
+
+      // Handle images if provided
+      if (req.files && req.files.length > 0) {
+        const images = req.files.map((file) => ({
+          file_name: file.filename,
+          listing_id: listing.id,
+        }));
+        await Image.bulkCreate(images);
+      }
+
+      
+     
+
+     
+    
+    res.status(200).json(listing);
+
+
+    } catch (error) {
+      console.error("Error creating listing:", error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
 
 // Update listing
 router.put(
@@ -80,13 +129,6 @@ router.put(
     
   }
 );
-
-
-
-
-
-
-
 
 // Get all listings
 router.get("/", async(req, res) => {
@@ -154,8 +196,6 @@ router.get("/detail/:id",auth, async (req, res) => {
   }
 });
 
-
-
 // Get my listings 
 router.get("/my_listings",auth, async (req, res) => {
   try {
@@ -175,8 +215,6 @@ router.get("/my_listings",auth, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-
 // Delete a listing
 router.delete("/:id", async (req, res) => {
   const listing_id = parseInt(req.params.id); // Extract the ID from the URL
