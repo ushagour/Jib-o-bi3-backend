@@ -11,6 +11,12 @@ const Messages = require('./Messages');
 // Define relationships
 User.hasMany(Listing, { foreignKey: 'user_id' });
 Listing.belongsTo(User, { foreignKey: 'user_id' });
+/*
+When querying the Messages model,
+ use the reciver and sender as aliases to include the sender and receiver objects.
+*/
+
+
 
 User.hasMany(Messages, { foreignKey: 'sender_id', as: 'sentMessages' });
 User.hasMany(Messages, { foreignKey: 'receiver_id', as: 'receivedMessages' });
