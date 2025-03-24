@@ -133,7 +133,10 @@ router.put(
 // Get all listings
 router.get("/", async(req, res) => {
   try {
-    const listings = await Listings.findAll({
+    const listings = await Listings.findAll(
+      {
+        order: [['createdAt', 'DESC']], // Order by created_at field in descending order
+
       include: [
         {
           model: Image,

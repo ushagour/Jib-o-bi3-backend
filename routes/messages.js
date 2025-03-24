@@ -106,11 +106,22 @@ router.post("/", [auth, validateWith(schema)], async (req, res) => {
   res.status(201).send();
 });
 
-
-router.delete("/:id", auth, (req, res) => {
+router.delete("/:id",async(req, res) => {
+  
   const messageId = parseInt(req.params.id); // Extract the ID from the URL
-  console.log("Deleting listing with ID:", messageId);
 
+  try {
+    const message = await Messages.findByPk(messageId);
+    if (!message) {
+      return res.status(404).send({ error: "message not found." });
+    }
+
+    await message.destroy(); // Delete the message
+    res.status(200).send({ message: "message deleted successfully." });
+  } catch (error) {
+    console.error("Error deleting message:", error);
+    res.status(500).send({ error: "An error occurred while deleting the message." });
+  } 
 
 });
 

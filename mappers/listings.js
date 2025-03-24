@@ -25,7 +25,7 @@ const mapper = listing => {
     images: listing.Images.map(mapImage), // Map all images
     imageUrl: listing.Images.length > 0 ? mapImage(listing.Images[0]).url : null,
     thumbnailUrl: listing.Images.length > 0 ? mapImage(listing.Images[0]).thumbnailUrl : null,
-    ownerName: listing.User ? listing.User.name : null,
+    owner: listing.User,   
     latitude: listing.latitude,
     longitude: listing.longitude,
     status: listing.status,
