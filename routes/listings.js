@@ -8,10 +8,11 @@ const auth = require("../middleware/auth");
 const imageResize = require("../middleware/imageResize");
 const delay = require("../middleware/delay");
 const listingMapper = require("../mappers/listings");
-const { Listing, Image, User, Favorites, Reviews, Messages } = require("../models");
+const { Listing, Image, User, Favorites, Reviews, Messages, Category } = require("../models");
 const config = require("config");
 
 const Listings = require('../models/Listing');
+const e = require("express");
 
 const upload = multer({
   dest: "uploads/",
@@ -79,54 +80,70 @@ router.post(
   }
 );
 
-
 // Update listing
 router.put(
   "/:id",
   [
     upload.array("images", config.get("maxImageCount")), // Handle file uploads
     validateWith(schema), // Validate incoming data
-    // validateCategoryId, // Ensure categoryId is valid
     imageResize, // Resize images if provided
-  ], auth, 
+  ],
+  auth,
   async (req, res) => {
     const listingId = parseInt(req.params.id); // Get listing ID from the URL
-    const existingListing = store.getListing(listingId);
+    console.log("Listing ID:", listingId);
 
-    console.log('---------back end logs ---------');
-    
-    console.log(listingId, existingListing);
-    
-    if (!existingListing) {
-      return res.status(404).send({ error: "Listing not found." });
+    try {
+      const existingListing = await Listing.findByPk(listingId);
+
+      console.log("Existing listing:", existingListing);
+
+      if (!existingListing) {
+        return res.status(404).send({ error: "Listing not found." });
+      }
+
+      // Update listing fields
+      const updatedListing = {
+        title: req.body.title || existingListing.title,
+        price: req.body.price ? parseFloat(req.body.price) : existingListing.price,
+        category_id: req.body.category_id
+          ? parseInt(req.body.category_id)
+          : existingListing.category_id,
+        description: req.body.description || existingListing.description,
+      };
+
+
+      // Update the listing in the database
+      await existingListing.update(updatedListing);
+
+      // Handle images if provided
+      if (req.files && req.files.length > 0) {
+        // Delete existing images for the listing
+        await Image.destroy({ where: { listing_id: listingId } });
+
+        // Add new images
+        const newImages = req.files.map((file) => ({
+          file_name: file.filename,
+          listing_id: listingId,
+        }));
+        await Image.bulkCreate(newImages);
+      }
+
+      // Fetch the updated listing with images
+      const updatedListingWithImages = await Listing.findByPk(listingId, {
+        include: [
+          {
+            model: Image,
+            attributes: ["file_name"], // Include only the file_name attribute
+          },
+        ],
+      });
+
+      res.status(200).json(updatedListingWithImages);
+    } catch (error) {
+      console.error("Error updating listing:", error);
+      res.status(500).json({ error: error.message });
     }
-
-    const updatedListing = {
-      ...existingListing, // Retain existing fields
-      title: req.body.title || existingListing.title,
-      price: req.body.price ? parseFloat(req.body.price) : existingListing.price,
-      categoryId: req.body.categoryId
-        ? parseInt(req.body.categoryId)
-        : existingListing.categoryId,
-      description: req.body.description || existingListing.description,
-      userId: parseInt(req.body.userId) || existingListing.userId,
-    };
-
-    // Update images if provided
-    if (req.files && req.files.length > 0) {
-      updatedListing.images = req.files.map((file) => ({ fileName: file.filename }));
-    }
-    // Update location if provided
-    if (req.body.location) {
-      updatedListing.location = req.body.location;
-    }
-
-    // Update the listing in the store
-    store.updateListing(listingId, updatedListing);
-
-    console.log("Updated listing:", updatedListing);
-    res.status(200).send(updatedListing);
-    
   }
 );
 
@@ -145,6 +162,8 @@ router.get("/", async(req, res) => {
         {
           model: User,
           attributes: ['name'], // Include only the name attribute
+          attributes: { exclude: ["password"] }, // Exclude the password field
+
         }
       ],
     });
@@ -170,6 +189,8 @@ router.get("/detail/:id",auth, async (req, res) => {
         {
           model: User,
           // attributes: ['name'], // Include only the name attribute
+          attributes: { exclude: ["password"] }, // Exclude the password field
+
         },
         {
           model: Favorites,
@@ -183,6 +204,11 @@ router.get("/detail/:id",auth, async (req, res) => {
           model: Messages,
           attributes: ['content', 'sender_id', 'receiver_id'], // Include content, sender_id, and receiver_id attributes
         },
+        {
+          model: Category,
+          attributes: ['name', 'id'], // Include only the name attribute
+        }
+
       ],
     });
     //cheacks if the listing is existent in the database

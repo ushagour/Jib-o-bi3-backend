@@ -1,4 +1,5 @@
 const config = require("config");
+const { Category } = require("../models");
 
 /**
  * Maps a listing object geted from the database and maps it to a more user-friendly format, 
@@ -18,10 +19,9 @@ const mapper = listing => {
     id: listing.id,
     title: listing.title,
     description: listing.description,
-    price: `$${listing.price}`,
+    price: listing.price,
     status: listing.status,
-    categoryId: listing.category_id,
-    category: listing.Category ? listing.Category.name : null,
+    Category: listing.Category,
     images: listing.Images.map(mapImage), // Map all images
     imageUrl: listing.Images.length > 0 ? mapImage(listing.Images[0]).url : null,
     thumbnailUrl: listing.Images.length > 0 ? mapImage(listing.Images[0]).thumbnailUrl : null,
