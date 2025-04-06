@@ -20,12 +20,23 @@ const upload = multer({
 });
 
 // Update the schema to be compatible with Joi v16+
-const schema = Joi.object({
+const updateListingSchema = Joi.object({
+  title: Joi.string().optional(),
+  description: Joi.string().allow("").optional(),
+  price: Joi.number().min(1).optional(),
+  category_id: Joi.string().optional(),
+  location: Joi.object({
+    latitude: Joi.number().optional(),
+    longitude: Joi.number().optional(),
+  }).optional(),
+});
+
+const addListingSchema = Joi.object({
   title: Joi.string().required(),
-  user_id: Joi.required(),
   description: Joi.string().allow(""),
   price: Joi.number().required().min(1),
   category_id: Joi.string().required(),
+  user_id: Joi.string().required(),
   location: Joi.object({
     latitude: Joi.number().required(),
     longitude: Joi.number().required(),
@@ -37,7 +48,7 @@ router.post(
   "/",
   [
     upload.array("images", config.get("maxImageCount")), // Handle file uploads
-    validateWith(schema), // Validate incoming data
+    validateWith(addListingSchema), // Validate incoming data
     // validateCategoryId, // Ensure categoryId is valid
     imageResize, // Resize images if provided
   ], auth, 
@@ -64,12 +75,6 @@ router.post(
         }));
         await Image.bulkCreate(images);
       }
-
-      
-     
-
-     
-    
     res.status(200).json(listing);
 
 
@@ -85,18 +90,16 @@ router.put(
   "/:id",
   [
     upload.array("images", config.get("maxImageCount")), // Handle file uploads
-    validateWith(schema), // Validate incoming data
+    validateWith(updateListingSchema), // Validate incoming data
     imageResize, // Resize images if provided
   ],
   auth,
   async (req, res) => {
     const listingId = parseInt(req.params.id); // Get listing ID from the URL
-    console.log("Listing ID:", listingId);
 
     try {
       const existingListing = await Listing.findByPk(listingId);
 
-      console.log("Existing listing:", existingListing);
 
       if (!existingListing) {
         return res.status(404).send({ error: "Listing not found." });
@@ -106,17 +109,17 @@ router.put(
       const updatedListing = {
         title: req.body.title || existingListing.title,
         price: req.body.price ? parseFloat(req.body.price) : existingListing.price,
-        category_id: req.body.category_id
-          ? parseInt(req.body.category_id)
-          : existingListing.category_id,
+        category_id: req.body.category_id ? parseInt(req.body.category_id):existingListing.category_id,
         description: req.body.description || existingListing.description,
       };
 
+      // console.log("Updated listing data:", updatedListing); // Log the updated listing data
+      
 
       // Update the listing in the database
       await existingListing.update(updatedListing);
 
-      // Handle images if provided
+      // // Handle images if provided
       if (req.files && req.files.length > 0) {
         // Delete existing images for the listing
         await Image.destroy({ where: { listing_id: listingId } });
@@ -126,10 +129,12 @@ router.put(
           file_name: file.filename,
           listing_id: listingId,
         }));
+
+        
         await Image.bulkCreate(newImages);
       }
 
-      // Fetch the updated listing with images
+      // Handle location if provided
       const updatedListingWithImages = await Listing.findByPk(listingId, {
         include: [
           {
@@ -234,7 +239,11 @@ router.get("/my_listings",auth, async (req, res) => {
         {
           model: Image,
           attributes: ['file_name'], // Include only the file_name attribute
+        }  ,   {
+          model: Category,
+          attributes: ['name', 'id'], // Include only the name attribute
         }
+
       ],
     });
 
