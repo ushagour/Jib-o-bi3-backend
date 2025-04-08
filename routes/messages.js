@@ -12,7 +12,8 @@ const c = require("config");
 
 const schema = Joi.object({
   content: Joi.string().required(),
-  id: Joi.number().required(),
+  target_user: Joi.number().integer().required(),
+  id: Joi.number().integer().required(),
 });
 const expo = new Expo();
 
@@ -65,8 +66,9 @@ router.get("/",auth, async(req, res) => {
 
 router.post("/", [auth, validateWith(schema)], async (req, res) => {
   
-  const { id, content } = req.body;
-
+  console.log("req.body", req.body);
+  
+  const { content,id,target_user,token } = req.body;
   
   const listing = await Listing.findByPk(id);
 
@@ -76,16 +78,28 @@ router.post("/", [auth, validateWith(schema)], async (req, res) => {
     console.log("listing not found");
     return res.status(400).send({ error: "Invalid listingId." });
   }
+  const targetUser = await User.findOne({ where: { id: target_user } });
 
 
-  const targetUser = await User.findByPk(listing.user_id);
 
 
-  if (!targetUser) {
-    console.log("targetUser not found");
-    return res.status(400).send({ error: "Invalid userId." });
-  }
 
+
+// console.log("targetUser", targetUser);
+  // Check if the sender and receiver are the same
+  // if (req.user.userId === targetUser.id) {
+  //   return res.status(400).send({ error: "You cannot send a message to yourself." });
+  // }
+  // Check if the user is blocked
+  // const blockedUser = await User.findOne({ where: { id: req.user.userId, blockedUsers: targetUser.id } });
+  // if (blockedUser) {
+  //   return res.status(400).send({ error: "You cannot send a message to this user." });
+  // }
+  // // Check if the target user is blocked
+  // const blockedByUser = await User.findOne({ where: { id: target_user, blockedUsers: req.user.userId } });
+  // if (blockedByUser) {
+  //   return res.status(400).send({ error: "This user has blocked you." });
+  // }
 
   
   const NewMessage = await Messages.create({
@@ -94,15 +108,27 @@ router.post("/", [auth, validateWith(schema)], async (req, res) => {
     listing_id: listing.id,
     content: content,
   });
-  const { expoPushToken } = targetUser;//the expo push token of the target user
 
+
+  // Extract the expoPushToken for the selected user
   
+
+if (!targetUser || !targetUser.expoPushToken) {
+  console.log("Target user or Expo Push Token not found");
+  return res.status(400).send({ error: "Invalid target user or missing push token" });
+}
+
+const expoPushToken = targetUser.expoPushToken;
+
   if (Expo.isExpoPushToken(expoPushToken)) {
+    await sendPushNotification(expoPushToken, NewMessage.content);
+
     console.log("Sending push notification");
-    await sendPushNotification(expoPushToken, NewMessage);
+  } else {
+    console.log("Invalid Expo Push Token");
   }
 
-  console.log("Sending success response");
+
   res.status(201).send();
 });
 
