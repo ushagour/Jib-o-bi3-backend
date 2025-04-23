@@ -24,6 +24,7 @@ router.get("/",auth, async(req, res) => {
 
     const messages = await Messages.findAll({
       where: { receiver_id: user_id },
+      order: [['createdAt', 'DESC']],
       include: [
         {
           model: User,
@@ -65,43 +66,24 @@ router.get("/",auth, async(req, res) => {
 });
 
 router.post("/", [auth, validateWith(schema)], async (req, res) => {
-  
-  console.log("req.body", req.body);
-  
-  const { content,id,target_user,token } = req.body;
-  
+
+  const { content, id, target_user } = req.body;
+
+  // Find the listing by ID
   const listing = await Listing.findByPk(id);
-
-
-
   if (!listing) {
-    console.log("listing not found");
+    console.log("Listing not found");
     return res.status(400).send({ error: "Invalid listingId." });
   }
+
+  // Find the target user by ID
   const targetUser = await User.findOne({ where: { id: target_user } });
+  if (!targetUser || !targetUser.expoPushToken) {
+    console.log("Target user or Expo Push Token not found");
+    return res.status(400).send({ error: "Invalid target user or missing push token" });
+  }
 
-
-
-
-
-
-// console.log("targetUser", targetUser);
-  // Check if the sender and receiver are the same
-  // if (req.user.userId === targetUser.id) {
-  //   return res.status(400).send({ error: "You cannot send a message to yourself." });
-  // }
-  // Check if the user is blocked
-  // const blockedUser = await User.findOne({ where: { id: req.user.userId, blockedUsers: targetUser.id } });
-  // if (blockedUser) {
-  //   return res.status(400).send({ error: "You cannot send a message to this user." });
-  // }
-  // // Check if the target user is blocked
-  // const blockedByUser = await User.findOne({ where: { id: target_user, blockedUsers: req.user.userId } });
-  // if (blockedByUser) {
-  //   return res.status(400).send({ error: "This user has blocked you." });
-  // }
-
-  
+  // Create the new message in the database
   const NewMessage = await Messages.create({
     sender_id: req.user.userId,
     receiver_id: targetUser.id,
@@ -109,27 +91,35 @@ router.post("/", [auth, validateWith(schema)], async (req, res) => {
     content: content,
   });
 
+  // Prepare the notification details
+  const notificationDetails = {
+    title: `New message from ${req.user.name}`, // Sender's name
+    body: content, // Message content
+    data: {
+      messageId: NewMessage.id,
+      senderId: req.user.userId,
+      receiverId: targetUser.id,
+      listingId: listing.id,
+      listingTitle: listing.title,
+    },
+  };
 
-  // Extract the expoPushToken for the selected user
-  
+  // Extract the Expo Push Token for the target user
+  const expoPushToken = targetUser.expoPushToken;
 
-if (!targetUser || !targetUser.expoPushToken) {
-  console.log("Target user or Expo Push Token not found");
-  return res.status(400).send({ error: "Invalid target user or missing push token" });
-}
-
-const expoPushToken = targetUser.expoPushToken;
-
+  // Send the push notification
   if (Expo.isExpoPushToken(expoPushToken)) {
-    await sendPushNotification(expoPushToken, NewMessage.content);
-
-    console.log("Sending push notification");
+    try {
+      await sendPushNotification(expoPushToken, notificationDetails);
+      // console.log("Push notification sent successfully");
+    } catch (error) {
+      console.error("Error sending push notification:", error);
+    }
   } else {
     console.log("Invalid Expo Push Token");
   }
 
-
-  res.status(201).send();
+  res.status(201).send(NewMessage);
 });
 
 router.delete("/:id",async(req, res) => {

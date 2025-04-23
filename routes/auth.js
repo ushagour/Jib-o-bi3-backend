@@ -37,7 +37,7 @@ router.post('/register', validateWith(Registerschema), async (req, res) => {
       const user = await User.create({
           name,
           email,
-          avatar: 'https://www.gravatar.com/avatar/?d=identicon',
+          avatar: 'avatars/avatar.png',
           password: hashedPassword,
       });
     
@@ -74,14 +74,56 @@ router.post("/login", validateWith(Loginschema),async (req, res) => {
 
 
 
+      const AvatarMapper = file_name => {
+          const baseUrl = config.get("assetsBaseUrl");
+        
+          return  `${baseUrl}${file_name}.jpg`;
+    
+        }
 
   const token = jwt.sign(
-    { userId: user.id, name: user.name, email, avatar: user.avatar },
+    { userId: user.id, name: user.name, email,avatar: AvatarMapper(user.avatar),
+    },
     config.get('jwtPrivateKey')
   );
   res.send(token);
 });
 
+
+// Change Password
+router.put('/change-password', [auth], async (req, res) => {
+  console.log("change password route called")
+  const { email, currentPassword, newPassword } = req.body;
+
+
+  console.log("Change Password Data:", req.body); // Debug log
+
+  try {
+    // Find the user by email
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Verify the current password
+    const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: "Current password is incorrect" });
+    }
+
+    // Hash the new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update the user's password
+    user.password = hashedPassword;
+    await user.save();
+
+    res.status(200).json({ message: "Password updated successfully" });
+  } catch (error) {
+    console.error("Error updating password:", error);
+    res.status(500).json({ error: "An error occurred while updating the password" });
+  }
+});
 
 
 
