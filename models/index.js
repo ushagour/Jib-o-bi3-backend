@@ -1,5 +1,5 @@
 // models/index.js
-const sequelize = require('../database'); // Import Sequelize instance
+const sequelize = require('../database/database'); // Import Sequelize instance
 const User = require('./User');
 const Category = require('./Category');
 const Listing = require('./Listing');

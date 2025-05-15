@@ -6,6 +6,7 @@ const bcrypt = require("bcrypt");
 const validateWith = require("../middleware/validation");
 const config = require("config");
 const { User } = require('../models');
+const auth = require("../middleware/auth");
 
 
 const Loginschema = Joi.object({
@@ -91,7 +92,7 @@ router.post("/login", validateWith(Loginschema),async (req, res) => {
 
 
 // Change Password
-router.put('/change-password', [auth], async (req, res) => {
+router.put('/change-password',[auth], async (req, res) => {
   console.log("change password route called")
   const { email, currentPassword, newPassword } = req.body;
 

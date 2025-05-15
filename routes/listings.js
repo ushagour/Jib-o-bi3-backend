@@ -230,6 +230,19 @@ router.get("/detail/:id",auth, async (req, res) => {
   }
 });
 
+
+router.get("/total_listings", async (req, res) => {
+  try {
+    const totalListings = await Listings.count();
+
+    console.log("Total listings:", totalListings); // Log the total listings count
+    
+    res.status(200).json({  totalListings });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get my listings 
 router.get("/my_listings",auth, async (req, res) => {
   try {
