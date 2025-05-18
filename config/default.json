@@ -1,5 +1,4 @@
 {
-  // "db": "mongodb://localhost:27017/your_db_name",
   "jwtPrivateKey": "your_jwt_private_key",
   "delay": 1000,
   "maxImageCount": 3
