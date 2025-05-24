@@ -1,8 +1,14 @@
 const sharp = require("sharp");
 const path = require("path");
 const fs = require("fs");
+const config = require("config");
 
-const outputFolder = "public/assets";
+// const outputFolder = "public/assets";
+
+
+
+  const baseUrl = config.get("assetsBaseUrl");
+const outputFolder = baseUrl ;
 
 module.exports = async (req, res, next) => {
   const images = [];
