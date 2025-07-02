@@ -11,6 +11,12 @@ const config = require("config");
 const app = express();
 const { sequelize } = require('./models');
 
+
+const cors = require('cors');
+// Enable CORS for all origins
+app.use(cors());
+
+
 app.use(express.static("public"));
 app.use(express.json());
 app.use(helmet());
