@@ -6,6 +6,7 @@ const Listing = require('./Listing');
 const Image = require('./Image');
 const Favorites = require('./Favorites');
 const Reviews = require('./Reviews');
+const Orders = require('./Orders');
 const Messages = require('./Messages');
 
 // Define relationships
@@ -39,6 +40,16 @@ Reviews.belongsTo(Listing, { foreignKey: 'listing_id' });
 Listing.hasMany(Messages, { foreignKey: 'listing_id' });
 Messages.belongsTo(Listing, { foreignKey: 'listing_id' });
 
+
+
+
+// Order relations
+Orders.belongsTo(Listing, { foreignKey: 'listing_id' });
+Listing.hasMany(Orders, { foreignKey: 'listing_id' });
+
+Orders.belongsTo(User, { foreignKey: 'buyer_id' });
+User.hasMany(Orders, { foreignKey: 'buyer_id' });
+
 // Export models and Sequelize instance
 module.exports = {
   sequelize,
@@ -48,5 +59,6 @@ module.exports = {
   Image,
   Favorites,
   Reviews,
-  Messages
+  Messages,
+  Orders
 };

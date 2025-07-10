@@ -88,3 +88,17 @@ CREATE TABLE Reviews (
     FOREIGN KEY (user_id) REFERENCES Users(id)
 );
 
+
+-- Orders Table
+CREATE TABLE Orders (   
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    listing_id INTEGER NOT NULL,
+    buyer_id INTEGER NOT NULL,
+    status TEXT DEFAULT 'pending',
+    total_price REAL NOT NULL,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (listing_id) REFERENCES Listings(id),
+    FOREIGN KEY (buyer_id) REFERENCES Users(id)
+);

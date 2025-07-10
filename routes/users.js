@@ -1,0 +1,48 @@
+
+const express = require("express");
+const app = express();
+app.use(express.json()); // Middleware to parse JSON request body
+
+const router = express.Router();
+
+const config = require("config");
+
+const { User } = require("../models");
+const auth = require("../middleware/auth");
+
+
+router.get("/", async (req, res) => {
+  try {
+    const users = await User.findAll({
+      attributes: ["id", "name", "email", "avatar"],
+    });
+
+    if (!users || users.length === 0) {
+      return res.status(404).send({ error: "No users found" });
+    }
+
+    const AvatarMapper = file_name => {
+      const baseUrl = config.get("assetsBaseUrl");
+    
+      return  `${baseUrl}${file_name}_avatar.jpg`;
+
+    }
+
+    const mappedUsers = users.map(user => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      avatar: AvatarMapper(user.avatar),
+    }));
+
+    res.send(mappedUsers);
+  } catch (error) {
+    console.error("Error retrieving users:", error);
+    res.status(500).send({ error: "An error occurred while retrieving the users" });
+  }
+}
+);
+
+
+
+module.exports = router;

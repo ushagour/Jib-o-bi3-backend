@@ -292,4 +292,33 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
+
+//top listings
+router.get("/top", async (req, res) => {
+  try {
+    const topListings = await Listing.findAll({
+      limit: 10,
+      order: [['createdAt', 'DESC']], // Order by created_at field in descending order
+      include: [
+        {
+          model: Image,
+          attributes: ['file_name'], // Include only the file_name attribute
+        },
+        {
+          model: User,
+          attributes: ['name'], // Include only the name attribute
+          attributes: { exclude: ["password"] }, // Exclude the password field
+
+        }
+      ],
+    });
+
+    const resources = topListings.map(listingMapper);
+    res.status(200).json(resources);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}); 
+
+
 module.exports = router;
