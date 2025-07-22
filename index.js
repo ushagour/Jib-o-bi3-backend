@@ -2,8 +2,10 @@ const express = require("express");
 const categories = require("./routes/categories");
 const listings = require("./routes/listings");
 const user = require("./routes/user");
+const stats = require("./routes/stats");
 const users = require("./routes/users");
 const auth = require("./routes/auth");
+const reviews = require("./routes/reviews");
 const messages = require("./routes/messages");
 const orders = require("./routes/orders");
 const expoPushTokens = require("./routes/expoPushTokens");
@@ -32,6 +34,9 @@ app.use("/api/users", users);
 app.use("/api/auth", auth);
 app.use("/api/expoPushTokens", expoPushTokens);
 app.use("/api/messages", messages);
+app.use("/api/reviews", reviews);
+app.use("/api/stats", stats);
+
 
 
 // Sync database and start server

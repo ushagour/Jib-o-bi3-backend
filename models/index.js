@@ -34,14 +34,21 @@ Image.belongsTo(Listing, { foreignKey: 'listing_id' });
 Listing.hasMany(Favorites, { foreignKey: 'listing_id' });
 Favorites.belongsTo(Listing, { foreignKey: 'listing_id' });
 
-Listing.hasMany(Reviews, { foreignKey: 'listing_id' });
-Reviews.belongsTo(Listing, { foreignKey: 'listing_id' });
 
 Listing.hasMany(Messages, { foreignKey: 'listing_id' });
 Messages.belongsTo(Listing, { foreignKey: 'listing_id' });
 
 
 
+
+//reviews relations 
+
+User.hasMany(Reviews, { foreignKey: 'user_id' });
+Reviews.belongsTo(User, { foreignKey: 'user_id' });
+
+
+Listing.hasMany(Reviews, { foreignKey: 'listing_id' });
+Reviews.belongsTo(Listing, { foreignKey: 'listing_id' });
 
 // Order relations
 Orders.belongsTo(Listing, { foreignKey: 'listing_id' });

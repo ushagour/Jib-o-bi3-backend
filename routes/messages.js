@@ -17,13 +17,13 @@ const schema = Joi.object({
 });
 const expo = new Expo();
 
-
-router.get("/",auth, async(req, res) => {
+//
+router.get("/:id", async(req, res) => {
   try {
     const user_id = req.user.userId;
 
     const messages = await Messages.findAll({
-      where: { receiver_id: user_id },
+      where: { receiver_id: user_id? user_id : null },
       order: [['createdAt', 'DESC']],
       include: [
         {
@@ -140,5 +140,139 @@ router.delete("/:id",async(req, res) => {
   } 
 
 });
+
+
+// unread messages
+
+
+router.get("/unread", auth, async (req, res) => {
+  try {
+    const userId = req.user.userId;   
+    const unreadMessages = await Messages.findAll({
+      where: {
+        receiver_id: userId,
+        is_read: false, // Assuming 'read' is a boolean field indicating if the message has been read
+      },
+      order: [['createdAt', 'DESC']],
+      include: [
+        {
+          model: User,
+          as: 'sender',
+          attributes: ['id', 'name', 'avatar'],
+        },
+        {
+          model: User,
+          as: 'receiver',
+          attributes: ['id', 'name', 'avatar'],
+        },
+        {
+          model: Listing,
+          attributes: ['id', 'title'],
+        },
+      ],
+    });
+    const resources = unreadMessages.map((message) => {
+      return {
+        id: message.id,
+        fromUser: message.sender.name,
+        toUser: message.receiver.name,
+        content: message.content,
+        avatar: message.sender.avatar,
+        listing: message.Listing ? { id: message.Listing.id, title: message.Listing.title } : null,
+        createdAt: message.createdAt,
+      };
+    });
+    if (!unreadMessages.length) return res.status(404).send({ error: "No unread messages found." });
+    res.send(resources);
+  } catch (error) {
+    console.error("Error fetching unread messages:", error);
+    res.status(500).send({ error: "An error occurred while fetching unread messages." });
+  }
+}); 
+
+// Fetch all messages (admin/global)
+router.get("/", async (req, res) => {
+  try {
+    const messages = await Messages.findAll({
+      order: [['createdAt', 'DESC']],
+      include: [
+        {
+          model: User,
+          as: 'sender',
+          attributes: ['id', 'name', 'avatar'],
+        },
+        {
+          model: User,
+          as: 'receiver',
+          attributes: ['id', 'name', 'avatar'],
+        },
+        {
+          model: Listing,
+          attributes: ['id', 'title'],
+        },
+      ],
+    });
+
+    const resources = messages.map((message) => ({
+      id: message.id,
+      fromUser: message.sender?.name,
+      toUser: message.receiver?.name,
+      content: message.content,
+      avatar: message.sender?.avatar,
+      listing: message.Listing ? { id: message.Listing.id, title: message.Listing.title } : null,
+      createdAt: message.createdAt,
+    }));
+
+    res.send(resources);
+  } catch (error) {
+    console.error("Error fetching all messages:", error);
+    res.status(500).send({ error: "An error occurred while fetching all messages." });
+  }
+});
+
+// Fetch messages for a specific user (by userId param)
+router.get("/user/:userId", async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    const messages = await Messages.findAll({
+      where: {
+        receiver_id: userId,
+      },
+      order: [['createdAt', 'DESC']],
+      include: [
+        {
+          model: User,
+          as: 'sender',
+          attributes: ['id', 'name', 'avatar'],
+        },
+        {
+          model: User,
+          as: 'receiver',
+          attributes: ['id', 'name', 'avatar'],
+        },
+        {
+          model: Listing,
+          attributes: ['id', 'title'],
+        },
+      ],
+    });
+
+    const resources = messages.map((message) => ({
+      id: message.id,
+      fromUser: message.sender?.name,
+      toUser: message.receiver?.name,
+      content: message.content,
+      avatar: message.sender?.avatar,
+      listing: message.Listing ? { id: message.Listing.id, title: message.Listing.title } : null,
+      createdAt: message.createdAt,
+    }));
+
+    res.send(resources);
+  } catch (error) {
+    console.error("Error fetching user messages:", error);
+    res.status(500).send({ error: "An error occurred while fetching user messages." });
+  }
+});
+
 
 module.exports = router;

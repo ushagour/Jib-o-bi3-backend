@@ -29,7 +29,10 @@ const User = sequelize.define('User', {
         expoPushToken: {
             type: DataTypes.STRING,
             allowNull: true,
-        }
+        },role: {
+            type: DataTypes.ENUM('admin','Customer'),
+            defaultValue: 'Customer',
+        },
      
     });
 

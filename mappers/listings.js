@@ -1,5 +1,5 @@
 const config = require("config");
-const { Category } = require("../models");
+const { Category, Messages } = require("../models");
 
 /**
  * Maps a listing object geted from the database and maps it to a more user-friendly format, 
@@ -30,6 +30,12 @@ const mapper = listing => {
     longitude: listing.longitude,
     status: listing.status,
     createdAt: listing.createdAt,
+    Messages: listing.Messages ? listing.Messages.map(message => ({
+      content: message.content,
+      senderId: message.sender_id,
+      receiverId: message.receiver_id
+    })) : [],
+    
   };
 };
 

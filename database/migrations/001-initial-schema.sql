@@ -15,8 +15,12 @@ CREATE TABLE Users (
     email TEXT NOT NULL UNIQUE,
     avatar TEXT,
     password TEXT NOT NULL,
+    role TEXT DEFAULT 'user', -- 'user' or 'admin'
+    status TEXT DEFAULT 'active', -- 'active', 'inactive', 'banned'
+    phone TEXT,
+    address TEXT,
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
-        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
 
 );
 
@@ -54,6 +58,7 @@ CREATE TABLE Messages (
     receiver_id INTEGER NOT NULL,
     listing_id INTEGER NOT NULL,
     content TEXT NOT NULL,
+    is_read BOOLEAN DEFAULT FALSE,
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
 
@@ -83,6 +88,7 @@ CREATE TABLE Reviews (
     comment TEXT,
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    status TEXT DEFAULT 'Open', -- 'active', 'inactive'
 
     FOREIGN KEY (listing_id) REFERENCES Listings(id),
     FOREIGN KEY (user_id) REFERENCES Users(id)

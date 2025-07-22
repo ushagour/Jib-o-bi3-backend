@@ -27,6 +27,10 @@ const Reviews = sequelize.define('Reviews', {
         type: DataTypes.INTEGER,
         allowNull: false,
     },
+    status: {
+        type: DataTypes.STRING, 
+        defaultValue: 'open', // Default status is 'open'
+    },
     comment: {
         type: DataTypes.TEXT,
         allowNull: true,

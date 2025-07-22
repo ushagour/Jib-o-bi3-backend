@@ -169,6 +169,10 @@ router.get("/", async(req, res) => {
           attributes: ['name'], // Include only the name attribute
           attributes: { exclude: ["password"] }, // Exclude the password field
 
+        },
+        {
+          model: Messages,
+          attributes: ['content', 'sender_id', 'receiver_id'], // Include content, sender_id, and receiver_id attributes
         }
       ],
     });

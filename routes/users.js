@@ -7,14 +7,25 @@ const router = express.Router();
 
 const config = require("config");
 
-const { User } = require("../models");
+const { User, Orders } = require("../models");
 const auth = require("../middleware/auth");
 
 
 router.get("/", async (req, res) => {
   try {
     const users = await User.findAll({
-      attributes: ["id", "name", "email", "avatar"],
+      EXCLUDE: ["password"], // Exclude password from the response
+      where: {
+        role: "customer"
+      },
+      include: [
+        {
+          model: Orders,
+          attributes: ["id"],
+        }
+      ],
+      order: [["createdAt", "DESC"]]
+
     });
 
     if (!users || users.length === 0) {
@@ -35,7 +46,7 @@ router.get("/", async (req, res) => {
       avatar: AvatarMapper(user.avatar),
     }));
 
-    res.send(mappedUsers);
+    res.send(users);
   } catch (error) {
     console.error("Error retrieving users:", error);
     res.status(500).send({ error: "An error occurred while retrieving the users" });
