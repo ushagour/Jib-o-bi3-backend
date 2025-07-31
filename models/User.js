@@ -22,6 +22,18 @@ const User = sequelize.define('User', {
             allowNull: false,
             unique: true,
         },
+        phone: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        address: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        status: {
+            type: DataTypes.ENUM('active', 'inactive', 'banned'),
+            defaultValue: 'active',
+        },
         password: {
             type: DataTypes.STRING,
             allowNull: false,

@@ -63,6 +63,23 @@ router.get('/recent', async (req, res) => {
 
   }
 });
+
+
+// Get count of completed orders for a specific user
+router.get('/completed-count/:userId', async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const count = await Orders.count({
+      where: {
+        buyer_id: userId,
+        status: 'completed'
+      }
+    });
+    res.json({ userId, completedOrders: count });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch completed orders count' });
+  }
+});
 // Get order by ID
 router.get('/:id', async (req, res) => {
   try {

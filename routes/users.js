@@ -39,12 +39,7 @@ router.get("/", async (req, res) => {
 
     }
 
-    const mappedUsers = users.map(user => ({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      avatar: AvatarMapper(user.avatar),
-    }));
+ 
 
     res.send(users);
   } catch (error) {
