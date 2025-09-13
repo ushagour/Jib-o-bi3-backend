@@ -110,13 +110,10 @@ router.post("/", async (req, res) => {
 // UPDATE a customer
 router.put("/:id", async (req, res) => {
   try {
-    const { name, email, avatar } = req.body;
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).send({ error: "User not found" });
 
-    user.name = name ?? user.name;
-    user.email = email ?? user.email;
-    user.avatar = avatar ?? user.avatar;
+    Object.assign(user, req.body);//copy the properties from req.body to user object
     await user.save();
 
     res.send({ message: "User updated", user });
