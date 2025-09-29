@@ -16,6 +16,9 @@ function getMonthRange(monthOffset = 0) {
   return { firstDay, lastDay };
 }
 
+// Apply auth middleware to all routes
+router.use(auth);
+
 router.get('/', async (req, res) => {
   try {
     // Listings

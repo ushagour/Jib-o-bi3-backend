@@ -5,6 +5,11 @@ const Orders = require('../models/Orders');
 const e = require('express');
 const { Listing, User } = require('../models');
 
+// const auth = require("../middleware/auth"); // Import your auth middleware
+
+
+// Apply auth middleware to all routes
+// router.use(auth);
 // Get all orders
 router.get('/', async (req, res) => {
   try {

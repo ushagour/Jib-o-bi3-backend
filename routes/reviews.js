@@ -7,9 +7,12 @@ const bcrypt = require("bcrypt");
 const multer = require("multer");
 const config = require("config");
 const e = require("express");
+const auth = require("../middleware/auth"); // Import your auth middleware
 
 const { Reviews,User,Listing } = require("../models");
 
+// Apply auth middleware to all routes
+router.use(auth);
 //reviews 
 router.get("/", async (req, res) => {
   try {

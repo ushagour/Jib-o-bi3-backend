@@ -8,11 +8,12 @@ const multer = require("multer");
 const config = require("config");
 const e = require("express");
 
-const { User } = require("../models");
+const { User, Orders,Listing } = require("../models");
 const auth = require("../middleware/auth");
 const validateWith = require("../middleware/validation");
 const imageResize = require("../middleware/imageResize");
 const Joi = require("joi");
+
 
 // Validation schema for creating/updating a user
 const userSchema = Joi.object({
@@ -34,7 +35,20 @@ router.get("/:id", async (req, res) => {
   const userId = parseInt(req.params.id);
 
   try {
-    const user = await User.findByPk(userId);
+    const user = await User.findByPk(userId, {
+      attributes: ['id', 'name', 'email', 'avatar'],
+      include: [
+        {
+          model: Listing,
+          attributes: ['id'], // Include only the file_name attribute
+        },{
+          model: Orders,
+          attributes: ['id', 'status'], // Include order ID and status
+        }
+      ],
+    }
+
+  );
 
     if (!user) return res.status(404).send({ error: "User not found" });
 
@@ -44,7 +58,7 @@ router.get("/:id", async (req, res) => {
       const baseUrl = config.get("assetsBaseUrl");
     
       return  `${baseUrl}${file_name}_avatar.jpg`;
-
+ 
     }
 
 
@@ -53,6 +67,11 @@ router.get("/:id", async (req, res) => {
       name: user.name,
       email: user.email,
       avatar: AvatarMapper(user.avatar),
+      completedOrders: user.Orders.filter(order => order.status === 'completed').length,
+      pendingOrders: user.Orders.filter(order => order.status === 'pending').length,
+      reviewsCount: user.reviews ? user.reviews.length : 0,
+      listingsCount: user.Listings ? user.Listings.length : 0,
+      phone: user.phone || "",
     });
 
   } catch (error) {

@@ -15,14 +15,17 @@ const config = require("config");
 const app = express();
 const { sequelize } = require('./models');
 
+require('dotenv').config();
 
 const cors = require('cors');
 // Enable CORS for all origins
 app.use(cors());
 
+// Or, allow only your frontend origin:
 
-app.use(express.static("public"));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static("public"));
 app.use(helmet());
 app.use(compression());
 

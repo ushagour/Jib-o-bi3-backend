@@ -1,5 +1,6 @@
 {
-  "jwtPrivateKey": "your_jwt_private_key",
   "delay": 1000,
-  "maxImageCount": 3
+  "maxImageCount": 3,
+   "jwtPrivateKey": "ar3+Yw074tNQtgxclp6KJePyAit8Q4BV8nLOXx1LjfE="
+
 }

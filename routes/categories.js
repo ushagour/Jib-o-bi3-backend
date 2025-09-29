@@ -1,8 +1,12 @@
 const express = require("express");
 const Category = require("../models/Category");
 const { Listing } = require("../models");
+const auth = require("../middleware/auth"); // Import your auth middleware
 
 const router = express.Router();
+
+// Apply auth middleware to all routes
+router.use(auth);
 
 router.get("/", async(req, res) => {
   try {
@@ -21,9 +25,8 @@ router.get("/:id", async(req, res) => {
          include: [
         {
           model: Listing,
-          attributes: ['id'], // Include only the file_name attribute
+          attributes: ['id'],
         }
-        
       ]}
     );
 
@@ -36,7 +39,7 @@ router.get("/:id", async(req, res) => {
 
 router.post("/", async(req, res) => {
   const { name, 	icon } = req.body;
-console.log("Creating new category:", { name, 	icon }); // Log the category being created
+  console.log("Creating new category:", { name, 	icon });
   if (!name || !icon) {
     return res.status(400).json({ error: "Name and icon are required" });
   }
@@ -47,8 +50,7 @@ console.log("Creating new category:", { name, 	icon }); // Log the category bein
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
-}
-);
+});
 
 router.put("/:id", async(req, res) => {
   const id = req.params.id;

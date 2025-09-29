@@ -16,6 +16,8 @@ const schema = Joi.object({
   id: Joi.number().integer().required(),
 });
 const expo = new Expo();
+// Apply auth middleware to all routes
+router.use(auth);
 
 //
 router.get("/:id", async(req, res) => {
@@ -80,6 +82,9 @@ router.post("/", [auth, validateWith(schema)], async (req, res) => {
   const targetUser = await User.findOne({ where: { id: target_user } });
   if (!targetUser || !targetUser.expoPushToken) {
     console.log("Target user or Expo Push Token not found");
+    console.log(targetUser);
+    console.log("Missing Expo Push Token");
+
     return res.status(400).send({ error: "Invalid target user or missing push token" });
   }
 
@@ -145,10 +150,13 @@ router.delete("/:id",async(req, res) => {
 // unread messages
 
 
-router.get("/unread", auth, async (req, res) => {
+router.get("/unread", async (req, res) => {
   try {
-    const userId = req.user.userId;   
-    const unreadMessages = await Messages.findAll({
+ const userId = req.query.userId || (req.user && req.user.userId);
+    if (!userId) {
+      return res.status(400).send({ error: "Missing userId." });
+    }
+        const unreadMessages = await Messages.findAll({
       where: {
         receiver_id: userId,
         is_read: false, // Assuming 'read' is a boolean field indicating if the message has been read

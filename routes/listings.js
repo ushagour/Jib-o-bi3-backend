@@ -36,7 +36,7 @@ const addListingSchema = Joi.object({
   description: Joi.string().allow(""),
   price: Joi.number().required().min(1),
   category_id: Joi.string().required(),
-  user_id: Joi.string().required(),
+  user_id: Joi.required(),
   location: Joi.object({
     latitude: Joi.number().required(),
     longitude: Joi.number().required(),
@@ -153,7 +153,8 @@ router.put(
 );
 
 // Get all listings
-router.get("/", async(req, res) => {
+router.get("/",auth, async(req, res) => {
+  console.log('Received token:', req.headers['x-auth-token']); // Debug log
   try {
     const listings = await Listings.findAll(
       {
@@ -271,7 +272,7 @@ router.get("/my_listings",auth, async (req, res) => {
   }
 });
 // Delete a listing
-router.delete("/:id", async (req, res) => {
+router.delete("/:id",auth, async (req, res) => {
   const listing_id = parseInt(req.params.id); // Extract the ID from the URL
 
   try {
@@ -298,7 +299,8 @@ router.delete("/:id", async (req, res) => {
 
 
 //top listings
-router.get("/top", async (req, res) => {
+router.get("/top",auth, async (req, res) => {
+  
   try {
     const topListings = await Listing.findAll({
       limit: 10,

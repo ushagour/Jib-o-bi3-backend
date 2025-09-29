@@ -3,10 +3,14 @@ const app = express();
 app.use(express.json());
 const bcrypt = require("bcrypt");
 
+const auth = require("../middleware/auth"); // Import your auth middleware
 
 const router = express.Router();
 const config = require("config");
 const { User, Orders } = require("../models");
+
+// Apply auth middleware to all routes
+router.use(auth);
 
 // GET all customers (already implemented)
 router.get("/", async (req, res) => {
