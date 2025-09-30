@@ -35,6 +35,10 @@ const Messages = sequelize.define('Messages', {
         type: DataTypes.TEXT,
         allowNull: false,
     },
+    is_read: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+    },
     createdAt: {
         type: DataTypes.DATE,
         allowNull: false,

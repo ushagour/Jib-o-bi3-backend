@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const Joi = require("joi");
 const { Expo } = require("expo-server-sdk");
+const { Op } = require('sequelize');
 
 const sendPushNotification = require("../utilities/pushNotifications");
 const auth = require("../middleware/auth");
@@ -20,6 +21,62 @@ const expo = new Expo();
 router.use(auth);
 
 //
+
+
+// unread messages notification bil 
+router.get("/unread", async (req, res) => {
+  try {
+    
+ const userId = req.query.userId || (req.user && req.user.userId);
+    if (!userId) {
+      return res.status(400).send({ error: "Missing userId." });
+    }
+        const unreadMessages = await Messages.findAll({
+
+
+         
+      where: {
+        receiver_id: userId,
+        is_read: false, // Assuming 'read' is a boolean field indicating if the message has been read
+      },
+      order: [['createdAt', 'DESC']],
+      include: [
+        {
+          model: User,
+          as: 'sender',
+          attributes: ['id', 'name', 'avatar'],
+        },
+        {
+          model: User,
+          as: 'receiver',
+          attributes: ['id', 'name', 'avatar'],
+        },
+        {
+          model: Listing,
+          attributes: ['id', 'title'],
+        },
+      ],
+    });
+    const resources = unreadMessages.map((message) => {
+      return {
+        id: message.id,
+        fromUser: message.sender.name,
+        toUser: message.receiver.name,
+        content: message.content,
+        avatar: message.sender.avatar,
+        listing: message.Listing ? { id: message.Listing.id, title: message.Listing.title } : null,
+        createdAt: message.createdAt,
+      };
+    });
+    if (!unreadMessages.length) return res.status(404).send({ error: "No unread messages found." });
+    res.send(resources);
+  } catch (error) {
+    console.error("Error fetching unread messages:", error);
+    res.status(500).send({ error: "An error occurred while fetching unread messages." });
+  }
+}); 
+
+
 router.get("/:id", async(req, res) => {
   try {
     const user_id = req.user.userId;
@@ -147,56 +204,6 @@ router.delete("/:id",async(req, res) => {
 });
 
 
-// unread messages
-
-
-router.get("/unread", async (req, res) => {
-  try {
- const userId = req.query.userId || (req.user && req.user.userId);
-    if (!userId) {
-      return res.status(400).send({ error: "Missing userId." });
-    }
-        const unreadMessages = await Messages.findAll({
-      where: {
-        receiver_id: userId,
-        is_read: false, // Assuming 'read' is a boolean field indicating if the message has been read
-      },
-      order: [['createdAt', 'DESC']],
-      include: [
-        {
-          model: User,
-          as: 'sender',
-          attributes: ['id', 'name', 'avatar'],
-        },
-        {
-          model: User,
-          as: 'receiver',
-          attributes: ['id', 'name', 'avatar'],
-        },
-        {
-          model: Listing,
-          attributes: ['id', 'title'],
-        },
-      ],
-    });
-    const resources = unreadMessages.map((message) => {
-      return {
-        id: message.id,
-        fromUser: message.sender.name,
-        toUser: message.receiver.name,
-        content: message.content,
-        avatar: message.sender.avatar,
-        listing: message.Listing ? { id: message.Listing.id, title: message.Listing.title } : null,
-        createdAt: message.createdAt,
-      };
-    });
-    if (!unreadMessages.length) return res.status(404).send({ error: "No unread messages found." });
-    res.send(resources);
-  } catch (error) {
-    console.error("Error fetching unread messages:", error);
-    res.status(500).send({ error: "An error occurred while fetching unread messages." });
-  }
-}); 
 
 // Fetch all messages (admin/global)
 router.get("/", async (req, res) => {
@@ -226,6 +233,7 @@ router.get("/", async (req, res) => {
       fromUser: message.sender?.name,
       toUser: message.receiver?.name,
       content: message.content,
+      is_read: message.is_read,
       avatar: message.sender?.avatar,
       listing: message.Listing ? { id: message.Listing.id, title: message.Listing.title } : null,
       createdAt: message.createdAt,
@@ -281,6 +289,30 @@ router.get("/user/:userId", async (req, res) => {
     res.status(500).send({ error: "An error occurred while fetching user messages." });
   }
 });
+
+// Mark a message as read
+router.patch("/:id/read", async (req, res) => {
+  try {
+
+    
+
+    const message = await Messages.findByPk(req.params.id);
+
+
+    
+    if (!message) return res.status(404).json({ error: "Message not found" });
+
+    message.is_read = true;
+    await message.save();
+
+    res.status(200).json(message);
+  } catch (error) {
+    log("Error marking message as read:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 
 
 module.exports = router;
