@@ -21,7 +21,10 @@ const mapper = listing => {
     description: listing.description,
     price: listing.price,
     status: listing.status,
-    Category: listing.Category,
+    Category: {
+      icon: listing.Category.icon,
+      name: listing.Category.name
+    },
     images: listing.Images.map(mapImage), // Map all images
     imageUrl: listing.Images.length > 0 ? mapImage(listing.Images[0]).url : null,
     thumbnailUrl: listing.Images.length > 0 ? mapImage(listing.Images[0]).thumbnailUrl : null,

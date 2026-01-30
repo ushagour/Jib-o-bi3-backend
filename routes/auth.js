@@ -81,7 +81,7 @@ router.post("/login", validateWith(Loginschema),async (req, res) => {
       const AvatarMapper = file_name => {
           const baseUrl = config.get("assetsBaseUrl");
         
-          return  `${baseUrl}${file_name}.jpg`;
+          return  `${baseUrl}${file_name}.png`;
     
         }
 

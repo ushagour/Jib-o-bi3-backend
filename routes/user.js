@@ -24,13 +24,15 @@ const userSchema = Joi.object({
 
 
 const upload = multer({
-  dest: "uploads/",
+  dest: "uploads/avatar/",
   limits: { fieldSize: 25 * 1024 * 1024 },
 });
 
 
 // GET: Retrieve a user by ID
-router.get("/:id", async (req, res) => {
+router.get("/:id", auth, async (req, res) => {
+  console.log("Fetching user with ID:", req.params.id); // Debug log
+  
 
   const userId = parseInt(req.params.id);
 
@@ -57,7 +59,7 @@ router.get("/:id", async (req, res) => {
     const AvatarMapper = file_name => {
       const baseUrl = config.get("assetsBaseUrl");
     
-      return  `${baseUrl}${file_name}_avatar.jpg`;
+      return  `${baseUrl}${file_name}_avatar.png`;
  
     }
 
@@ -66,7 +68,7 @@ router.get("/:id", async (req, res) => {
       id: user.id,
       name: user.name,
       email: user.email,
-      avatar: AvatarMapper(user.avatar),
+      avatar:  AvatarMapper(user.avatar),
       completedOrders: user.Orders.filter(order => order.status === 'completed').length,
       pendingOrders: user.Orders.filter(order => order.status === 'pending').length,
       reviewsCount: user.reviews ? user.reviews.length : 0,
@@ -86,9 +88,8 @@ router.get("/:id", async (req, res) => {
 
 
 router.put("/:id", [auth, 
-    upload.array("images", config.get("maxImageCount")), // Handle file uploads
-    imageResize, // Resize images if provided
-    validateWith(userSchema), // Validate incoming data
+    upload.single("avatar"), // Single avatar upload
+    validateWith(userSchema),
   ], async (req, res) => {
   const userId = parseInt(req.params.id);
 
@@ -108,19 +109,20 @@ router.put("/:id", [auth,
     }
    
 
-      // Update listing fields
+
+    console.log("Request Body:", req.body); // Debug log
+    console.log("Uploaded File:", req.file); // Debug log
+    
+      // Update user fields
       const updatedUserData = {
         name: req.body.name || existingUser.name,
         email: req.body.email || existingUser.email,
-        avatar: req.body.avatar ,
+        avatar: req.body.avatar || existingUser.avatar,
       };
 
       if (req.file) {
         updatedUserData.avatar = req.file.filename;
-        // Resize the image if needed
-        // await imageResize(req.file.path, 500, 500); // Resize to 500x500 pixels
       }
-
       
 
 
@@ -168,6 +170,53 @@ router.delete("/:id", auth, async (req, res) => {
   }
 });
 
+// DELETE: Remove user avatar
+router.delete("/:id/avatar", auth, async (req, res) => {
+  const userId = parseInt(req.params.id);
 
+
+
+  try {
+    const existingUser = await User.findByPk(userId);
+
+    if (!existingUser) {
+      return res.status(404).send({ error: "User not found." });
+    }
+
+    // Check if user has permission to delete this avatar (optional security check)
+    if (req.user.userId !== userId) {
+      return res.status(403).send({ error: "You can only delete your own avatar." });
+    }
+
+    // Remove avatar file from filesystem if it exists
+    if (existingUser.avatar) {
+      const fs = require('fs');
+      const path = require('path');
+      
+      const avatarPath = path.join(__dirname, '../uploads/avatar/', existingUser.avatar);
+      
+      // Check if file exists and delete it
+      if (fs.existsSync(avatarPath)) {
+        fs.unlinkSync(avatarPath);
+        console.log(`Avatar file deleted: ${avatarPath}`);
+      }
+    }
+
+    // Update user record to remove avatar
+    await existingUser.update({ avatar: null });
+
+    res.status(200).json({
+      message: "Avatar deleted successfully",
+      id: existingUser.id,
+      name: existingUser.name,
+      email: existingUser.email,
+      avatar: null,
+    });
+
+  } catch (error) {
+    console.error("Error deleting avatar:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 module.exports = router;

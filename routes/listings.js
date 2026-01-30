@@ -154,7 +154,6 @@ router.put(
 
 // Get all listings
 router.get("/",auth, async(req, res) => {
-  console.log('Received token:', req.headers['x-auth-token']); // Debug log
   try {
     const listings = await Listings.findAll(
       {
@@ -174,7 +173,11 @@ router.get("/",auth, async(req, res) => {
         {
           model: Messages,
           attributes: ['content', 'sender_id', 'receiver_id'], // Include content, sender_id, and receiver_id attributes
+        }, {
+          model: Category,
+          attributes: ['name', 'icon'], // Include only the name attribute
         }
+
       ],
     });
 
@@ -186,8 +189,7 @@ router.get("/",auth, async(req, res) => {
 });
 
 // Get a single listing NB AUTH
-router.get("/detail/:id",auth, async (req, res) => {
-
+router.get("/detail/:id", auth, async (req, res) => {
   try {
     const listing = await Listings.findOne({
       where: { id: req.params.id },
@@ -239,8 +241,6 @@ router.get("/detail/:id",auth, async (req, res) => {
 router.get("/total_listings", async (req, res) => {
   try {
     const totalListings = await Listings.count();
-
-    console.log("Total listings:", totalListings); // Log the total listings count
     
     res.status(200).json({  totalListings });
   } catch (error) {

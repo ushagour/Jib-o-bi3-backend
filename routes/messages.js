@@ -68,7 +68,7 @@ router.get("/unread", async (req, res) => {
         createdAt: message.createdAt,
       };
     });
-    if (!unreadMessages.length) return res.status(404).send({ error: "No unread messages found." });
+    if (!unreadMessages.length) return res.status(204).send({ info: "No unread messages found." });
     res.send(resources);
   } catch (error) {
     console.error("Error fetching unread messages:", error);

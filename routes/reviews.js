@@ -71,6 +71,41 @@ router.delete("/:id", async (req, res) => {
     res.status(500).send({ error: "Internal server error." });
   }
 });
+// unread review notification bill 
+router.get("/unread", async (req, res) => {
+  try {
+    const userId = req.query.userId || (req.user && req.user.userId);
+    if (!userId) {
+      return res.status(400).send({ error: "Missing userId." });
+    }
+
+    const unreadReviews = await Reviews.findAll({
+      where: {
+        user_id: userId,
+        is_read: false,
+      },
+      order: [['createdAt', 'DESC']],
+      include: [
+        {
+          model: User,
+          attributes: ['id', 'name', 'avatar'],
+        },
+        {
+          model: Listing,
+          attributes: ['id', 'title'],
+        },
+      ],
+    });
+
+    if (!unreadReviews.length) {
+      return res.status(404).send({ error: "No unread reviews found." });
+    }
+
+    res.send(unreadReviews);
+  } catch (error) {
+
+  }
+}); 
 
 module.exports = router;
 

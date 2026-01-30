@@ -4,8 +4,7 @@ const router = express.Router();
 const Orders = require('../models/Orders');
 const e = require('express');
 const { Listing, User } = require('../models');
-
-// const auth = require("../middleware/auth"); // Import your auth middleware
+const auth = require("../middleware/auth"); // Import your auth middleware
 
 
 // Apply auth middleware to all routes
@@ -86,9 +85,20 @@ router.get('/completed-count/:userId', async (req, res) => {
   }
 });
 // Get order by ID
-router.get('/:id', async (req, res) => {
+router.get('/:id', auth, async (req, res) => {
   try {
-    const order = await Orders.findById(req.params.id);
+    const order = await Orders.findByPk(req.params.id, {
+      include: [
+        {
+          model: Listing,
+          attributes: ['title', 'id'],
+        },
+        {
+          model: User,
+          attributes: ['name', 'email'],
+        }
+      ]
+    });
     if (!order) return res.status(404).json({ error: 'Order not found' });
     res.json(order);
   } catch (err) {
