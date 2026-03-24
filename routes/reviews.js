@@ -13,6 +13,29 @@ const { Reviews,User,Listing } = require("../models");
 
 // Apply auth middleware to all routes
 router.use(auth);
+
+// Get reviews for a specific listing - MUST come before generic GET /
+router.get("/listing/:listingId", async (req, res) => {
+  try {
+    const { listingId } = req.params;
+
+    const reviews = await Reviews.findAll({
+      where: {
+        listing_id: listingId,
+      },
+      include: [
+        { model: User, attributes: ['id', 'name', 'avatar'] },
+      ],
+      order: [['createdAt', 'DESC']],
+    });
+
+    res.send(reviews);
+  } catch (error) {
+    console.error("Error fetching reviews for listing:", error);
+    res.status(500).send({ error: "Internal server error." });
+  }
+});
+
 //reviews 
 router.get("/", async (req, res) => {
   try {

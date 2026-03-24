@@ -60,10 +60,13 @@ router.get("/unread", async (req, res) => {
     const resources = unreadMessages.map((message) => {
       return {
         id: message.id,
+        senderId: message.sender?.id,
+        receiverId: message.receiver?.id,
         fromUser: message.sender.name,
         toUser: message.receiver.name,
         content: message.content,
         avatar: message.sender.avatar,
+        listingId: message.listing_id,
         listing: message.Listing ? { id: message.Listing.id, title: message.Listing.title } : null,
         createdAt: message.createdAt,
       };
@@ -106,10 +109,13 @@ router.get("/:id", async(req, res) => {
     const resources = messages.map((message) => {
       return {
         id: message.id,
+        senderId: message.sender?.id,
+        receiverId: message.receiver?.id,
         fromUser: message.sender.name,
         toUser: message.receiver.name,
         content: message.content,
         avatar: message.sender.avatar,
+        listingId: message.listing_id,
         listing: message.Listing ? { id: message.Listing.id, title: message.Listing.title } : null,
         createdAt: message.createdAt,
       };
@@ -230,11 +236,14 @@ router.get("/", async (req, res) => {
 
     const resources = messages.map((message) => ({
       id: message.id,
+      senderId: message.sender?.id,
+      receiverId: message.receiver?.id,
       fromUser: message.sender?.name,
       toUser: message.receiver?.name,
       content: message.content,
       is_read: message.is_read,
       avatar: message.sender?.avatar,
+      listingId: message.listing_id,
       listing: message.Listing ? { id: message.Listing.id, title: message.Listing.title } : null,
       createdAt: message.createdAt,
     }));
@@ -275,10 +284,13 @@ router.get("/user/:userId", async (req, res) => {
 
     const resources = messages.map((message) => ({
       id: message.id,
+      senderId: message.sender?.id,
+      receiverId: message.receiver?.id,
       fromUser: message.sender?.name,
       toUser: message.receiver?.name,
       content: message.content,
       avatar: message.sender?.avatar,
+      listingId: message.listing_id,
       listing: message.Listing ? { id: message.Listing.id, title: message.Listing.title } : null,
       createdAt: message.createdAt,
     }));

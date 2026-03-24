@@ -39,6 +39,38 @@ const Orders = sequelize.define('Orders', {
             isDecimal: true,
         },
     },
+    quantity: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 1,
+        validate: {
+            min: 1,
+        },
+    },
+    payment_method: {
+        type: DataTypes.STRING,
+        allowNull: true,
+    },
+    payment_status: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        defaultValue: 'pending',
+        validate: {
+            isIn: [['pending', 'paid', 'failed', 'refunded']],
+        },
+    },
+    shipping_address: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+    },
+    phone: {
+        type: DataTypes.STRING,
+        allowNull: true,
+    },
+    notes: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+    },
     
     createdAt: {
         type: DataTypes.DATE,

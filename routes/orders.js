@@ -109,8 +109,29 @@ router.get('/:id', auth, async (req, res) => {
 // Create new order
 router.post('/', async (req, res) => {
   try {
-    const { listing_id, buyer_id } = req.body;
-    const order = await Orders.create({ listing_id, buyer_id });
+    const {
+      listing_id,
+      buyer_id,
+      total_price,
+      quantity,
+      payment_method,
+      payment_status,
+      shipping_address,
+      phone,
+      notes,
+    } = req.body;
+
+    const order = await Orders.create({
+      listing_id,
+      buyer_id,
+      total_price,
+      quantity,
+      payment_method,
+      payment_status,
+      shipping_address,
+      phone,
+      notes,
+    });
     res.status(201).json(order);
   } catch (err) {
     res.status(400).json({ error: 'Failed to create order' });
