@@ -15,7 +15,7 @@ module.exports = function (req, res, next) {
     req.user = decoded;
     next();
   } catch (ex) {
-    // console.log("JWT verification failed:", ex); // Debug log
+     console.log("JWT verification failed:", ex); // Debug log
     res.status(400).send("MDLW:Invalid token.");
   }
 };
