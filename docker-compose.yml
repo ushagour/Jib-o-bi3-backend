@@ -1,6 +1,10 @@
 version: "3.8"
 services:
   api:
-    build: .
+    image: ${DOCKER_IMAGE:-jibobi3-backend:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
     ports:
       - "3000:3000"
