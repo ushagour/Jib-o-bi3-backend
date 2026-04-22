@@ -8,7 +8,10 @@ const auth = require("./routes/auth");
 const reviews = require("./routes/reviews");
 const messages = require("./routes/messages");
 const orders = require("./routes/orders");
+const notifications = require("./routes/notifications");
+const favorites = require("./routes/favorites");
 const expoPushTokens = require("./routes/expoPushTokens");
+const adminNotifications = require("./routes/adminNotifications");
 const helmet = require("helmet");
 const compression = require("compression");
 const config = require("config");
@@ -33,12 +36,15 @@ app.use("/api/categories", categories);
 app.use("/api/listings", listings);
 app.use("/api/user", user);
 app.use("/api/orders", orders);
+app.use("/api/notifications", notifications);
+app.use("/api/favorites", favorites);
 app.use("/api/users", users);
 app.use("/api/auth", auth);
 app.use("/api/expoPushTokens", expoPushTokens);
 app.use("/api/messages", messages);
 app.use("/api/reviews", reviews);
 app.use("/api/stats", stats);
+app.use("/api/admin-notifications", adminNotifications);
 
 
 

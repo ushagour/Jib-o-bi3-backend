@@ -215,31 +215,29 @@ router.get("/category/:categoryId", auth, async (req, res) => {
     const listings = await Listing.findAll({
       where: { category_id: categoryId },
       order: [["createdAt", "DESC"]],
-           include: [
+      include: [
         {
           model: Image,
-          attributes: ['file_name'], // Include only the file_name attribute
+          attributes: ["file_name"],
         },
         {
-          attributes: ['id', 'name', 'icon'], // Include category identity and display fields
-          attributes: ['name'], // Include only the name attribute
-          attributes: { exclude: ["password"] }, // Exclude the password field
-
+          model: User,
+          attributes: { exclude: ["password"] },
         },
         {
           model: Messages,
-          attributes: ['content', 'sender_id', 'receiver_id'], // Include content, sender_id, and receiver_id attributes
-        }, {
+          attributes: ["content", "sender_id", "receiver_id"],
+        },
+        {
           model: Category,
-          attributes: ['name', 'icon'], // Include only the name attribute
-        }
+          attributes: ["id", "name", "icon"],
+        },
       ],
     });
 
     const resources = listings.map(listingMapper);
-console.log(resources);
 
-    // res.status(200).json(resources);
+    res.status(200).json(resources);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
