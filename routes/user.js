@@ -1,12 +1,9 @@
 const express = require("express");
-const app = express();
-app.use(express.json()); // Middleware to parse JSON request body
-
 const router = express.Router();
-const bcrypt = require("bcrypt");
 const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
 const config = require("config");
-const e = require("express");
 
 const { User, Orders,Listing } = require("../models");
 const auth = require("../middleware/auth");
@@ -23,10 +20,40 @@ const userSchema = Joi.object({
 });
 
 
-const upload = multer({
-  dest: "uploads/avatar/",
-  limits: { fieldSize: 25 * 1024 * 1024 },
+// Configure multer with custom storage to preserve original filenames
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(__dirname, "../uploads/avatar/");
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    // Use original filename without hashing
+    const ext = path.extname(file.originalname);
+    const name = path.basename(file.originalname, ext);
+    cb(null, `${name}${ext}`);
+  },
 });
+
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 25 * 1024 * 1024 },
+});
+
+// Helper function to get avatar URL
+const getAvatarUrl = (user) => {
+  const baseUrl = config.get("assetsBaseUrl");
+  
+  // If avatar is null, use user's name as avatar
+  if (!user.avatar) {
+    return user.name;
+  }
+  
+  // Return avatar file URL
+  return `${baseUrl}${user.avatar}`;
+};
 
 
 // GET: Retrieve a user by ID
@@ -54,21 +81,11 @@ router.get("/:id", auth, async (req, res) => {
 
     if (!user) return res.status(404).send({ error: "User not found" });
 
-
-
-    const AvatarMapper = file_name => {
-      const baseUrl = config.get("assetsBaseUrl");
-    
-      return  `${baseUrl}${file_name}_avatar.png`;
- 
-    }
-
-
     res.send({
       id: user.id,
       name: user.name,
       email: user.email,
-      avatar:  AvatarMapper(user.avatar),
+      avatar: getAvatarUrl(user),
       completedOrders: user.Orders.filter(order => order.status === 'completed').length,
       pendingOrders: user.Orders.filter(order => order.status === 'pending').length,
       reviewsCount: user.reviews ? user.reviews.length : 0,
@@ -84,11 +101,9 @@ router.get("/:id", auth, async (req, res) => {
 
 
 // PUT: Update a user by ID
-// Configure multer for file uploads
-
-
 router.put("/:id", [auth, 
     upload.single("avatar"), // Single avatar upload
+    imageResize, // Process and resize avatar image
     validateWith(userSchema),
   ], async (req, res) => {
   const userId = parseInt(req.params.id);
@@ -110,8 +125,6 @@ router.put("/:id", [auth,
    
 
 
-    console.log("Request Body:", req.body); // Debug log
-    console.log("Uploaded File:", req.file); // Debug log
     
       // Update user fields
       const updatedUserData = {
@@ -120,6 +133,7 @@ router.put("/:id", [auth,
         avatar: req.body.avatar || existingUser.avatar,
       };
 
+      // If file uploaded, use the original filename from req.file
       if (req.file) {
         updatedUserData.avatar = req.file.filename;
       }
@@ -130,21 +144,12 @@ router.put("/:id", [auth,
       await existingUser.update(updatedUserData);
       await existingUser.save(); // Save the changes to the database
 
-
-
-      // Map the avatar URL to the desired format
-      const AvatarMapper = file_name => {
-        const baseUrl = config.get("assetsBaseUrl");
-      
-        return  `${baseUrl}${file_name}.jpg`;
-  
-      }
       // Send the updated user data in the response
       res.status(200).json({
         id: existingUser.id,
         name: existingUser.name,
         email: existingUser.email,
-        avatar: AvatarMapper(existingUser.avatar),
+        avatar: getAvatarUrl(existingUser),
       });
     } catch (error) {
       console.error("Error updating user data :", error);
@@ -170,11 +175,44 @@ router.delete("/:id", auth, async (req, res) => {
   }
 });
 
+// PATCH: Update user role (admin only)
+router.patch("/:id/role", auth, async (req, res) => {
+  try {
+    // Only admins can update roles
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied. Admin only.' });
+    }
+
+    const userId = parseInt(req.params.id);
+    const { role } = req.body;
+
+    if (!role || !['admin', 'Customer'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role. Must be "admin" or "Customer".' });
+    }
+
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    await user.update({ role });
+
+    res.json({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      message: `User role updated to ${role}`,
+    });
+  } catch (error) {
+    console.error('Error updating user role:', error);
+    res.status(500).json({ error: 'Failed to update user role' });
+  }
+});
+
 // DELETE: Remove user avatar
 router.delete("/:id/avatar", auth, async (req, res) => {
   const userId = parseInt(req.params.id);
-
-
 
   try {
     const existingUser = await User.findByPk(userId);
@@ -190,9 +228,6 @@ router.delete("/:id/avatar", auth, async (req, res) => {
 
     // Remove avatar file from filesystem if it exists
     if (existingUser.avatar) {
-      const fs = require('fs');
-      const path = require('path');
-      
       const avatarPath = path.join(__dirname, '../uploads/avatar/', existingUser.avatar);
       
       // Check if file exists and delete it
@@ -210,7 +245,7 @@ router.delete("/:id/avatar", auth, async (req, res) => {
       id: existingUser.id,
       name: existingUser.name,
       email: existingUser.email,
-      avatar: null,
+      avatar: getAvatarUrl(existingUser), // Will return user's name when avatar is null
     });
 
   } catch (error) {
