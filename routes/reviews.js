@@ -1,15 +1,9 @@
 const express = require("express");
-const app = express();
-app.use(express.json()); // Middleware to parse JSON request body
-
 const router = express.Router();
-const bcrypt = require("bcrypt");
-const multer = require("multer");
-const config = require("config");
-const e = require("express");
-const auth = require("../middleware/auth"); // Import your auth middleware
+const auth = require("../middleware/auth");
+const { createNotification } = require("../utilities/notifications");
 
-const { Reviews,User,Listing } = require("../models");
+const { Reviews, User, Listing } = require("../models");
 
 // Apply auth middleware to all routes
 router.use(auth);
@@ -28,7 +22,6 @@ router.get("/listing/:listingId", async (req, res) => {
       ],
       order: [['createdAt', 'DESC']],
     });
-
     res.send(reviews);
   } catch (error) {
     console.error("Error fetching reviews for listing:", error);
@@ -49,7 +42,14 @@ router.get("/", async (req, res) => {
 
     if (!reviews.length) return res.status(404).send({ error: "No reviews found." });
 
-    res.send(reviews);
+    const resources = reviews.map((review) => ({
+      ...review.toJSON(),
+      content: review.comment,
+      user: review.User,
+      listing: review.Listing,
+    }));
+
+    res.send(resources);
   } catch (error) {
     console.error("Error fetching reviews:", error);
     res.status(500).send({ error: "Internal server error." });
@@ -66,13 +66,32 @@ router.post("/", async (req, res) => {
 
   try {
     const newReview = await Reviews.create({
-      content,
+      comment: content,
       rating,
       user_id: userId,
       listing_id: listingId
     });
 
-    res.status(201).send(newReview);
+    const [listing, reviewer] = await Promise.all([
+      Listing.findByPk(listingId, { attributes: ['id', 'title', 'user_id'] }),
+      User.findByPk(userId, { attributes: ['id', 'name'] }),
+    ]);
+
+    if (listing && reviewer && String(listing.user_id) !== String(userId)) {
+      await createNotification({
+        userId: listing.user_id,
+        actorId: userId,
+        listingId: listing.id,
+        type: 'review',
+        title: `New review from ${reviewer.name}`,
+        content,
+      });
+    }
+
+    res.status(201).send({
+      ...newReview.toJSON(),
+      content: newReview.comment,
+    });
   } catch (error) {
     console.error("Error creating review:", error);
     res.status(500).send({ error: "Internal server error." });
@@ -102,10 +121,19 @@ router.get("/unread", async (req, res) => {
       return res.status(400).send({ error: "Missing userId." });
     }
 
+    const ownedListings = await Listing.findAll({
+      where: { user_id: userId },
+      attributes: ['id'],
+    });
+
+    const listingIds = ownedListings.map((listing) => listing.id);
+    if (!listingIds.length) {
+      return res.status(200).send([]);
+    }
+
     const unreadReviews = await Reviews.findAll({
       where: {
-        user_id: userId,
-        is_read: false,
+        listing_id: listingIds,
       },
       order: [['createdAt', 'DESC']],
       include: [
@@ -120,13 +148,17 @@ router.get("/unread", async (req, res) => {
       ],
     });
 
-    if (!unreadReviews.length) {
-      return res.status(404).send({ error: "No unread reviews found." });
-    }
+    const resources = unreadReviews.map((review) => ({
+      ...review.toJSON(),
+      content: review.comment,
+      user: review.User,
+      listing: review.Listing,
+    }));
 
-    res.send(unreadReviews);
+    res.send(resources);
   } catch (error) {
-
+    console.error("Error fetching unread reviews:", error);
+    res.status(500).send({ error: "Internal server error." });
   }
 }); 
 

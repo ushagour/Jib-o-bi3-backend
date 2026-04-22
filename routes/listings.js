@@ -10,9 +10,7 @@ const delay = require("../middleware/delay");
 const listingMapper = require("../mappers/listings");
 const { Listing, Image, User, Favorites, Reviews, Messages, Category } = require("../models");
 const config = require("config");
-
-const Listings = require('../models/Listing');
-const e = require("express");
+const { createListingUpdateNotifications } = require("../utilities/notifications");
 
 const upload = multer({
   dest: "uploads/",
@@ -24,6 +22,7 @@ const updateListingSchema = Joi.object({
   title: Joi.string().optional(),
   description: Joi.string().allow("").optional(),
   price: Joi.number().min(1).optional(),
+  status: Joi.string().optional(),
   category_id: Joi.string().optional(),
   location: Joi.object({
     latitude: Joi.number().optional(),
@@ -109,8 +108,17 @@ router.put(
       const updatedListing = {
         title: req.body.title || existingListing.title,
         price: req.body.price ? parseFloat(req.body.price) : existingListing.price,
+        status: req.body.status || existingListing.status,
         category_id: req.body.category_id ? parseInt(req.body.category_id):existingListing.category_id,
         description: req.body.description || existingListing.description,
+      };
+
+      const changes = {
+        title: updatedListing.title !== existingListing.title,
+        price: updatedListing.price !== existingListing.price,
+        status: updatedListing.status !== existingListing.status,
+        category_id: updatedListing.category_id !== existingListing.category_id,
+        description: updatedListing.description !== existingListing.description,
       };
 
       // console.log("Updated listing data:", updatedListing); // Log the updated listing data
@@ -118,6 +126,13 @@ router.put(
 
       // Update the listing in the database
       await existingListing.update(updatedListing);
+
+      await createListingUpdateNotifications({
+        listingId,
+        actorId: req.user.userId,
+        listingTitle: updatedListing.title,
+        changes,
+      });
 
       // // Handle images if provided
       if (req.files && req.files.length > 0) {
@@ -155,7 +170,7 @@ router.put(
 // Get all listings
 router.get("/",auth, async(req, res) => {
   try {
-    const listings = await Listings.findAll(
+    const listings = await Listing.findAll(
       {
         order: [['createdAt', 'DESC']], // Order by created_at field in descending order
 
@@ -180,9 +195,51 @@ router.get("/",auth, async(req, res) => {
 
       ],
     });
-
+    // console.log(listings);
     const resources = listings.map(listingMapper);
     res.status(200).json(resources);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get listings by category
+router.get("/category/:categoryId", auth, async (req, res) => {
+  const categoryId = parseInt(req.params.categoryId, 10);
+
+  if (Number.isNaN(categoryId)) {
+    return res.status(400).json({ error: "Invalid category id." });
+  }
+
+  try {
+    const listings = await Listing.findAll({
+      where: { category_id: categoryId },
+      order: [["createdAt", "DESC"]],
+           include: [
+        {
+          model: Image,
+          attributes: ['file_name'], // Include only the file_name attribute
+        },
+        {
+          attributes: ['id', 'name', 'icon'], // Include category identity and display fields
+          attributes: ['name'], // Include only the name attribute
+          attributes: { exclude: ["password"] }, // Exclude the password field
+
+        },
+        {
+          model: Messages,
+          attributes: ['content', 'sender_id', 'receiver_id'], // Include content, sender_id, and receiver_id attributes
+        }, {
+          model: Category,
+          attributes: ['name', 'icon'], // Include only the name attribute
+        }
+      ],
+    });
+
+    const resources = listings.map(listingMapper);
+console.log(resources);
+
+    // res.status(200).json(resources);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -191,7 +248,7 @@ router.get("/",auth, async(req, res) => {
 // Get a single listing NB AUTH
 router.get("/detail/:id", auth, async (req, res) => {
   try {
-    const listing = await Listings.findOne({
+    const listing = await Listing.findOne({
       where: { id: req.params.id },
       include: [
         {
@@ -240,7 +297,7 @@ router.get("/detail/:id", auth, async (req, res) => {
 
 router.get("/total_listings", async (req, res) => {
   try {
-    const totalListings = await Listings.count();
+    const totalListings = await Listing.count();
     
     res.status(200).json({  totalListings });
   } catch (error) {

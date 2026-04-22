@@ -1,11 +1,6 @@
 const express = require("express");
-const app = express();
-app.use(express.json());
-const bcrypt = require("bcrypt");
-
-const auth = require("../middleware/auth"); // Import your auth middleware
-
 const router = express.Router();
+const auth = require("../middleware/auth");
 const config = require("config");
 const { User, Orders } = require("../models");
 

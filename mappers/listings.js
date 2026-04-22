@@ -22,8 +22,9 @@ const mapper = listing => {
     price: listing.price,
     status: listing.status,
     Category: {
-      icon: listing.Category.icon,
-      name: listing.Category.name
+      id: listing.Category?.id,
+      icon: listing.Category?.icon,
+      name: listing.Category?.name
     },
     images: listing.Images.map(mapImage), // Map all images
     imageUrl: listing.Images.length > 0 ? mapImage(listing.Images[0]).url : null,

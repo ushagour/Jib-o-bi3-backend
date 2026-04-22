@@ -5,6 +5,7 @@ const { Expo } = require("expo-server-sdk");
 const { Op } = require('sequelize');
 
 const sendPushNotification = require("../utilities/pushNotifications");
+const { createNotification } = require("../utilities/notifications");
 const auth = require("../middleware/auth");
 const validateWith = require("../middleware/validation");
 const { Listing, Image,User,Favorites,Reviews,Messages } = require("../models");//
@@ -157,6 +158,15 @@ router.post("/", [auth, validateWith(schema)], async (req, res) => {
     receiver_id: targetUser.id,
     listing_id: listing.id,
     content: content,
+  });
+
+  await createNotification({
+    userId: targetUser.id,
+    actorId: req.user.userId,
+    listingId: listing.id,
+    type: "message",
+    title: `Message from ${req.user.name}`,
+    content,
   });
 
   // Prepare the notification details
