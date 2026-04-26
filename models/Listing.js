@@ -28,7 +28,7 @@ const Listing = sequelize.define('Listing', {
     },
     status: {
         type: DataTypes.STRING,
-        defaultValue: 'instock available',
+        defaultValue: 'Selled - still available',
     },
     latitude: {
         type: DataTypes.FLOAT, // For location

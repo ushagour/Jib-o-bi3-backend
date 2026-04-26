@@ -150,6 +150,14 @@ router.put('/:id/status', async (req, res) => {
     }
 
     await order.update({ status });
+
+    if (status === 'completed') {
+      await Listing.update(
+        { status: 'selled' },
+        { where: { id: order.listing_id } }
+      );
+    }
+
     res.json(order);
   } catch (err) {
     console.error('🔴 Update error details:', {

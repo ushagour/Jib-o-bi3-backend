@@ -2,13 +2,15 @@ const express = require("express");
 const router = express.Router();
 const Joi = require("joi");
 const multer = require("multer");
+const fs = require("fs/promises");
+const path = require("path");
 const categoriesStore = require("../routes/categories");
 const validateWith = require("../middleware/validation");
 const auth = require("../middleware/auth");
 const imageResize = require("../middleware/imageResize");
 const delay = require("../middleware/delay");
 const listingMapper = require("../mappers/listings");
-const { Listing, Image, User, Favorites, Reviews, Messages, Category } = require("../models");
+const { sequelize, Listing, Image, User, Favorites, Reviews, Messages, Category, Orders, Notification } = require("../models");
 const config = require("config");
 const { createListingUpdateNotifications } = require("../utilities/notifications");
 
@@ -36,10 +38,12 @@ const addListingSchema = Joi.object({
   price: Joi.number().required().min(1),
   category_id: Joi.string().required(),
   user_id: Joi.required(),
+  latitude: Joi.number().optional().allow(null, ""),
+  longitude: Joi.number().optional().allow(null, ""),
   location: Joi.object({
-    latitude: Joi.number().required(),
-    longitude: Joi.number().required(),
-  }).optional(),
+    latitude: Joi.number().optional().allow(null, ""),
+    longitude: Joi.number().optional().allow(null, ""),
+  }).optional().allow(null),
 });
 
 // Create a new listing
@@ -53,17 +57,54 @@ router.post(
   ], auth, 
   async (req, res) => {
     try {
-      const { title, user_id, description, price, category_id, location } = req.body;
-
-      // Create the listing
-      const listing = await Listing.create({
+      const {
         title,
         user_id,
         description,
         price,
         category_id,
-        latitude : location.latitude,
-        longitude : location.longitude,
+        latitude: latitudeRaw,
+        longitude: longitudeRaw,
+        location,
+      } = req.body;
+
+      const parsedLocation =
+        typeof location === "string"
+          ? (() => {
+              try {
+                return JSON.parse(location);
+              } catch {
+                return null;
+              }
+            })()
+          : location;
+
+      let latitude =
+        parsedLocation?.latitude !== undefined && parsedLocation?.latitude !== ""
+          ? Number(parsedLocation.latitude)
+          : latitudeRaw !== undefined && latitudeRaw !== ""
+            ? Number(latitudeRaw)
+            : null;
+
+      let longitude =
+        parsedLocation?.longitude !== undefined && parsedLocation?.longitude !== ""
+          ? Number(parsedLocation.longitude)
+          : longitudeRaw !== undefined && longitudeRaw !== ""
+            ? Number(longitudeRaw)
+            : null;
+
+      if (latitude === 0 || !Number.isFinite(latitude)) latitude = null;
+      if (longitude === 0 || !Number.isFinite(longitude)) longitude = null;
+
+      // Create the listing
+      const listing = await Listing.create({
+        title,
+        user_id: req.user?.userId || user_id,
+        description,
+        price,
+        category_id,
+        latitude,
+        longitude,
       });
 
       // Handle images if provided
@@ -168,7 +209,7 @@ router.put(
 );
 
 // Get all listings
-router.get("/",auth, async(req, res) => {
+router.get("/", async(req, res) => {
   try {
     const listings = await Listing.findAll(
       {
@@ -204,7 +245,7 @@ router.get("/",auth, async(req, res) => {
 });
 
 // Get listings by category
-router.get("/category/:categoryId", auth, async (req, res) => {
+router.get("/category/:categoryId", async (req, res) => {
   const categoryId = parseInt(req.params.categoryId, 10);
 
   if (Number.isNaN(categoryId)) {
@@ -244,7 +285,7 @@ router.get("/category/:categoryId", auth, async (req, res) => {
 });
 
 // Get a single listing NB AUTH
-router.get("/detail/:id", auth, async (req, res) => {
+router.get("/detail/:id", async (req, res) => {
   try {
     const listing = await Listing.findOne({
       where: { id: req.params.id },
@@ -330,22 +371,50 @@ router.get("/my_listings",auth, async (req, res) => {
 router.delete("/:id",auth, async (req, res) => {
   const listing_id = parseInt(req.params.id); // Extract the ID from the URL
 
+  if (Number.isNaN(listing_id)) {
+    return res.status(400).json({ error: "Invalid listing id." });
+  }
+
   try {
     const listing = await Listing.findByPk(listing_id, {
       include: [Image, Favorites, Reviews, Messages], // Include associated images
     });
+
     if (!listing) {
       return res.status(404).send({ error: "Listing not found." });
     }
 
-    // Delete records in other associated tables
-    await Image.destroy({ where: { listing_id: listing.id } });
-    await Favorites.destroy({ where: { listing_id: listing.id } });
-    await Reviews.destroy({ where: { listing_id: listing.id } });
-    await Messages.destroy({ where: { listing_id: listing.id } });
+    const imageFileNames = (listing.Images || [])
+      .map((image) => image.file_name)
+      .filter(Boolean);
 
-    // Delete the listing from the database
-    await listing.destroy();
+    await sequelize.transaction(async (transaction) => {
+      // Delete records in all associated tables that reference this listing
+      await Image.destroy({ where: { listing_id: listing.id }, transaction });
+      await Favorites.destroy({ where: { listing_id: listing.id }, transaction });
+      await Reviews.destroy({ where: { listing_id: listing.id }, transaction });
+      await Messages.destroy({ where: { listing_id: listing.id }, transaction });
+      await Orders.destroy({ where: { listing_id: listing.id }, transaction });
+      await Notification.destroy({ where: { listing_id: listing.id }, transaction });
+
+      // Delete the listing from the database
+      await listing.destroy({ transaction });
+    });
+
+    // Best-effort cleanup of uploaded files on disk
+    await Promise.all(
+      imageFileNames.map(async (fileName) => {
+        const filePath = path.join(__dirname, "..", "uploads", fileName);
+        try {
+          await fs.unlink(filePath);
+        } catch (fileError) {
+          if (fileError.code !== "ENOENT") {
+            console.error(`Failed to remove upload file: ${fileName}`, fileError);
+          }
+        }
+      })
+    );
+
     res.send({ message: "Listing deleted successfully." });
   } catch (error) {
     res.status(500).json({ error: error.message });
