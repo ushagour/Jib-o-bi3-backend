@@ -33,11 +33,16 @@ const mapper = listing => {
     latitude: listing.latitude,
     longitude: listing.longitude,
     status: listing.status,
+    state: listing.status,
     createdAt: listing.createdAt,
     Messages: listing.Messages ? listing.Messages.map(message => ({
       content: message.content,
       senderId: message.sender_id,
       receiverId: message.receiver_id
+    })) : [],
+    Reviews: listing.Reviews ? listing.Reviews.map(review => ({
+      comment: review.comment,
+      rating: review.rating
     })) : [],
     
   };

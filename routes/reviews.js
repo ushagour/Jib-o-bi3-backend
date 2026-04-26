@@ -1,9 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const auth = require("../middleware/auth");
+const config = require("config");
 const { createNotification } = require("../utilities/notifications");
 
-const { Reviews, User, Listing } = require("../models");
+const { Reviews, User, Listing, Image } = require("../models");
 
 // Apply auth middleware to all routes
 router.use(auth);
@@ -32,10 +33,22 @@ router.get("/listing/:listingId", async (req, res) => {
 //reviews 
 router.get("/", async (req, res) => {
   try {
+    const assetsBaseUrl = config.get("assetsBaseUrl");
+
     const reviews = await Reviews.findAll({
       include: [
         { model: User,  attributes: ['id', 'name', 'avatar'] },
-        { model: Listing,  attributes: ['id', 'title'] }
+        {
+          model: Listing,
+          attributes: ['id', 'title'],
+          include: [
+            {
+              model: Image,
+              attributes: ['file_name'],
+              required: false,
+            },
+          ],
+        }
       ],
       order: [['createdAt', 'DESC']]
     });
@@ -46,7 +59,15 @@ router.get("/", async (req, res) => {
       ...review.toJSON(),
       content: review.comment,
       user: review.User,
-      listing: review.Listing,
+      listing: review.Listing
+        ? {
+            id: review.Listing.id,
+            title: review.Listing.title,
+            imageUrl: review.Listing.Images?.[0]?.file_name
+              ? `${assetsBaseUrl}${review.Listing.Images[0].file_name}_thumb.jpg`
+              : null,
+          }
+        : null,
     }));
 
     res.send(resources);

@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const auth = require("../middleware/auth");
 const { Favorites, Listing } = require("../models");
+const { createNotification } = require("../utilities/notifications");
 
 router.use(auth);
 
@@ -48,6 +49,17 @@ router.post("/", async (req, res) => {
       user_id: userId,
       listing_id,
     });
+
+    if (String(listing.user_id) !== String(userId)) {
+      await createNotification({
+        userId: listing.user_id,
+        actorId: userId,
+        listingId: listing.id,
+        type: "like",
+        title: "New like on your listing",
+        content: `Someone liked your listing: ${listing.title}`,
+      });
+    }
 
     res.status(201).json({ ok: true, data: favorite });
   } catch (error) {

@@ -12,6 +12,7 @@ const notifications = require("./routes/notifications");
 const favorites = require("./routes/favorites");
 const expoPushTokens = require("./routes/expoPushTokens");
 const adminNotifications = require("./routes/adminNotifications");
+const settings = require("./routes/settings");
 const helmet = require("helmet");
 const compression = require("compression");
 const config = require("config");
@@ -45,6 +46,7 @@ app.use("/api/messages", messages);
 app.use("/api/reviews", reviews);
 app.use("/api/stats", stats);
 app.use("/api/admin-notifications", adminNotifications);
+app.use("/api/settings", settings);
 
 
 
