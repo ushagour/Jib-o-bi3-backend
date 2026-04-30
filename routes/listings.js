@@ -10,7 +10,7 @@ const auth = require("../middleware/auth");
 const imageResize = require("../middleware/imageResize");
 const delay = require("../middleware/delay");
 const listingMapper = require("../mappers/listings");
-const { sequelize, Listing, Image, User, Favorites, Reviews, Messages, Category, Orders, Notification } = require("../models");
+const { sequelize, Listing, Image, User, Favorites, Reviews, Category, Orders, Notification } = require("../models");
 const config = require("config");
 const { createListingUpdateNotifications } = require("../utilities/notifications");
 
@@ -24,8 +24,12 @@ const updateListingSchema = Joi.object({
   title: Joi.string().optional(),
   description: Joi.string().allow("").optional(),
   price: Joi.number().min(1).optional(),
-  status: Joi.string().optional(),
+  status: Joi.string().valid('selled', 'still available').optional(),
   category_id: Joi.string().optional(),
+  carSize: Joi.string().optional().allow(null, ""),
+  carColor: Joi.string().optional().allow(null, ""),
+  carModel: Joi.string().optional().allow(null, ""),
+  carYear: Joi.number().optional().allow(null, ""),
   location: Joi.object({
     latitude: Joi.number().optional(),
     longitude: Joi.number().optional(),
@@ -38,6 +42,10 @@ const addListingSchema = Joi.object({
   price: Joi.number().required().min(1),
   category_id: Joi.string().required(),
   user_id: Joi.required(),
+  carSize: Joi.string().optional().allow(null, ""),
+  carColor: Joi.string().optional().allow(null, ""),
+  carModel: Joi.string().optional().allow(null, ""),
+  carYear: Joi.number().optional().allow(null, ""),
   latitude: Joi.number().optional().allow(null, ""),
   longitude: Joi.number().optional().allow(null, ""),
   location: Joi.object({
@@ -63,6 +71,10 @@ router.post(
         description,
         price,
         category_id,
+        carSize,
+        carColor,
+        carModel,
+        carYear,
         latitude: latitudeRaw,
         longitude: longitudeRaw,
         location,
@@ -103,6 +115,10 @@ router.post(
         description,
         price,
         category_id,
+        carSize: carSize || null,
+        carColor: carColor || null,
+        carModel: carModel || null,
+        carYear: carYear || null,
         latitude,
         longitude,
       });
@@ -152,6 +168,10 @@ router.put(
         status: req.body.status || existingListing.status,
         category_id: req.body.category_id ? parseInt(req.body.category_id):existingListing.category_id,
         description: req.body.description || existingListing.description,
+        carSize: req.body.carSize !== undefined ? req.body.carSize : existingListing.carSize,
+        carColor: req.body.carColor !== undefined ? req.body.carColor : existingListing.carColor,
+        carModel: req.body.carModel !== undefined ? req.body.carModel : existingListing.carModel,
+        carYear: req.body.carYear !== undefined ? req.body.carYear : existingListing.carYear,
       };
 
       const changes = {
@@ -161,6 +181,15 @@ router.put(
         category_id: updatedListing.category_id !== existingListing.category_id,
         description: updatedListing.description !== existingListing.description,
       };
+
+      const carFieldsChanged = updatedListing.carSize !== existingListing.carSize ||
+        updatedListing.carColor !== existingListing.carColor ||
+        updatedListing.carModel !== existingListing.carModel ||
+        updatedListing.carYear !== existingListing.carYear;
+
+      if (carFieldsChanged) {
+        changes.carDetails = true;
+      }
 
       // console.log("Updated listing data:", updatedListing); // Log the updated listing data
       
@@ -225,10 +254,6 @@ router.get("/", async(req, res) => {
           attributes: ['name'], // Include only the name attribute
           attributes: { exclude: ["password"] }, // Exclude the password field
 
-        },
-        {
-          model: Messages,
-          attributes: ['content', 'sender_id', 'receiver_id'], // Include content, sender_id, and receiver_id attributes
         }, {
           model: Category,
           attributes: ['name', 'icon'], // Include only the name attribute
@@ -266,19 +291,11 @@ router.get("/category/:categoryId", async (req, res) => {
           attributes: { exclude: ["password"] },
         },
         {
-          model: Messages,
-          attributes: ["content", "sender_id", "receiver_id"],
-        },
-        {
           model: Category,
           attributes: ["id", "name", "icon"],
         },
       ],
     });
-
-    const resources = listings.map(listingMapper);
-
-    res.status(200).json(resources);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -309,16 +326,11 @@ router.get("/detail/:id", async (req, res) => {
           attributes: ['comment', 'rating'], // Include content and rating attributes
         },
         {
-          model: Messages,
-          attributes: ['content', 'sender_id', 'receiver_id'], // Include content, sender_id, and receiver_id attributes
-        },
-        {
           model: Category,
           attributes: ['name', 'id'], // Include only the name attribute
         }
-
       ],
-    });
+    }); 
     //cheacks if the listing is existent in the database
     if (!listing) {
       console.log("Listing not found");
@@ -377,7 +389,7 @@ router.delete("/:id",auth, async (req, res) => {
 
   try {
     const listing = await Listing.findByPk(listing_id, {
-      include: [Image, Favorites, Reviews, Messages], // Include associated images
+        include: [Image, Favorites, Reviews], // Include associated images
     });
 
     if (!listing) {
@@ -392,8 +404,7 @@ router.delete("/:id",auth, async (req, res) => {
       // Delete records in all associated tables that reference this listing
       await Image.destroy({ where: { listing_id: listing.id }, transaction });
       await Favorites.destroy({ where: { listing_id: listing.id }, transaction });
-      await Reviews.destroy({ where: { listing_id: listing.id }, transaction });
-      await Messages.destroy({ where: { listing_id: listing.id }, transaction });
+        await Reviews.destroy({ where: { listing_id: listing.id }, transaction, individualHooks: true });
       await Orders.destroy({ where: { listing_id: listing.id }, transaction });
       await Notification.destroy({ where: { listing_id: listing.id }, transaction });
 

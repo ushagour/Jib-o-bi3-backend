@@ -7,7 +7,6 @@ const Image = require('./Image');
 const Favorites = require('./Favorites');
 const Reviews = require('./Reviews');
 const Orders = require('./Orders');
-const Messages = require('./Messages');
 const Notification = require('./Notification');
 const AdminActivity = require('./AdminActivity');
 const MobileSetting = require('./MobileSetting');
@@ -16,18 +15,6 @@ const { registerActivityHooks } = require('../utilities/activityLogger');
 // Define relationships
 User.hasMany(Listing, { foreignKey: 'user_id' });
 Listing.belongsTo(User, { foreignKey: 'user_id' });
-/*
-When querying the Messages model,
- use the reciver and sender as aliases to include the sender and receiver objects.
-*/
-
-
-
-User.hasMany(Messages, { foreignKey: 'sender_id', as: 'sentMessages' });
-User.hasMany(Messages, { foreignKey: 'receiver_id', as: 'receivedMessages' });
-
-Messages.belongsTo(User, { foreignKey: 'sender_id', as: 'sender' });
-Messages.belongsTo(User, { foreignKey: 'receiver_id', as: 'receiver' });
 
 Category.hasMany(Listing, { foreignKey: 'category_id' });
 Listing.belongsTo(Category, { foreignKey: 'category_id' });
@@ -39,10 +26,6 @@ Listing.hasMany(Favorites, { foreignKey: 'listing_id' });
 Favorites.belongsTo(Listing, { foreignKey: 'listing_id' });
 User.hasMany(Favorites, { foreignKey: 'user_id' });
 Favorites.belongsTo(User, { foreignKey: 'user_id' });
-
-
-Listing.hasMany(Messages, { foreignKey: 'listing_id' });
-Messages.belongsTo(Listing, { foreignKey: 'listing_id' });
 
 User.hasMany(Notification, { foreignKey: 'user_id', as: 'notifications' });
 Notification.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
@@ -85,7 +68,6 @@ module.exports = {
   Image,
   Favorites,
   Reviews,
-  Messages,
   Notification,
   Orders,
   AdminActivity,

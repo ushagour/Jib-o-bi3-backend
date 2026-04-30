@@ -27,8 +27,9 @@ const Listing = sequelize.define('Listing', {
         allowNull: false,
     },
     status: {
-        type: DataTypes.STRING,
-        defaultValue: 'Selled - still available',
+        type: DataTypes.ENUM('Selled', 'still available'),
+        allowNull: false,
+        defaultValue: 'still available',
     },
     latitude: {
         type: DataTypes.FLOAT, // For location
@@ -36,7 +37,22 @@ const Listing = sequelize.define('Listing', {
     longitude: {
         type: DataTypes.FLOAT, // For location
     },
-   
+    carSize: {
+        type: DataTypes.STRING,
+        allowNull: true, // Optional car field
+    },
+    carColor: {
+        type: DataTypes.STRING,
+        allowNull: true, // Optional car field
+    },
+    carModel: {
+        type: DataTypes.STRING,
+        allowNull: true, // Optional car field
+    },
+    carYear: {
+        type: DataTypes.INTEGER,
+        allowNull: true, // Optional car field
+    },
 });
 
 module.exports = Listing;

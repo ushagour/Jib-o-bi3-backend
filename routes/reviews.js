@@ -86,7 +86,7 @@ router.post("/", async (req, res) => {
   }
 
   try {
-    const newReview = await Reviews.create({
+      const newReview = await Reviews.create({
       comment: content,
       rating,
       user_id: userId,

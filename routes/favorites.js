@@ -1,10 +1,51 @@
 const express = require("express");
 const router = express.Router();
 const auth = require("../middleware/auth");
-const { Favorites, Listing } = require("../models");
+const { Favorites, Listing, Image, User, Category } = require("../models");
+const listingMapper = require("../mappers/listings");
 const { createNotification } = require("../utilities/notifications");
 
 router.use(auth);
+
+
+router.get("/get_all", async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const favorites = await Favorites.findAll({
+      where: { user_id: userId },
+      include: [
+        {
+          model: Listing,
+          include: [
+            {
+              model: Image,
+              attributes: ["file_name"],
+            },
+            {
+              model: User,
+              attributes: { exclude: ["password"] },
+            },
+            {
+              model: Category,
+              attributes: ["id", "name", "icon"],
+            },
+          ],
+        },
+      ],
+      order: [["createdAt", "DESC"]],
+    });
+
+    const resources = favorites
+      .map((favorite) => favorite.Listing)
+      .filter(Boolean)
+      .map(listingMapper);
+
+    res.json(resources);
+  }
+  catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 router.get("/", async (req, res) => {
   try {

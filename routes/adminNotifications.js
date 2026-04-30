@@ -9,6 +9,10 @@ router.use(auth);
 
 router.get("/", async (req, res) => {
   try {
+    if (!req.user || String(req.user.role || "").toLowerCase() !== "admin") {
+      return res.status(403).json({ error: "Access denied. Admin only." });
+    }
+
     const limitParam = parseInt(req.query.limit, 10);
     const limit = Number.isInteger(limitParam)
       ? Math.min(Math.max(limitParam, 1), 200)

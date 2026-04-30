@@ -7,6 +7,7 @@ const validateWith = require("../middleware/validation");
 const config = require("config");
 const { User } = require('../models');
 const auth = require("../middleware/auth");
+const JWT_SECRET = process.env.JWT_SECRET || config.get("jwtPrivateKey");
 
 const Loginschema = Joi.object({
   email: Joi.string().email().required(),
@@ -46,7 +47,7 @@ router.post('/register', validateWith(Registerschema), async (req, res) => {
     
      // Generate a JWT token//todo refactor this to use the auth context
      const token = jwt.sign(
-      { userId: user.id, name: user.name, email: user.email, avatar: user.avatar },
+      { userId: user.id, name: user.name, email: user.email, avatar: user.avatar, role: user.role },
       JWT_SECRET
 
     );
@@ -89,9 +90,9 @@ router.post("/login", validateWith(Loginschema),async (req, res) => {
         
 
   const token = jwt.sign(
-    { userId: user.id, name: user.name, email,avatar: AvatarMapper(user.avatar),
+    { userId: user.id, name: user.name, email,avatar: AvatarMapper(user.avatar), role: user.role,
     },
-    process.env.JWT_SECRET || config.get("JWT_SECRET"),
+    JWT_SECRET,
   );
   res.send(token);
 });

@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { Notification, Favorites, Messages, Orders } = require('../models');
+const { Notification, Favorites, Orders } = require('../models');
 
 async function createNotification({
   userId,
@@ -43,10 +43,6 @@ async function createListingUpdateNotifications({ listingId, actorId, listingTit
 
   const [favorites, messages, orders] = await Promise.all([
     Favorites.findAll({ where: { listing_id: listingId }, attributes: ['user_id'] }),
-    Messages.findAll({
-      where: { listing_id: listingId },
-      attributes: ['sender_id', 'receiver_id'],
-    }),
     Orders.findAll({ where: { listing_id: listingId }, attributes: ['buyer_id'] }),
   ]);
 
@@ -54,10 +50,6 @@ async function createListingUpdateNotifications({ listingId, actorId, listingTit
 
   favorites.forEach((row) => recipients.add(row.user_id));
   orders.forEach((row) => recipients.add(row.buyer_id));
-  messages.forEach((row) => {
-    recipients.add(row.sender_id);
-    recipients.add(row.receiver_id);
-  });
 
   recipients.delete(actorId);
   recipients.delete(null);
