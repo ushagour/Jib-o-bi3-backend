@@ -2,10 +2,24 @@
 const express = require('express');
 const router = express.Router();
 const Orders = require('../models/Orders');
-const { Listing, User } = require('../models');
+const { Listing, User, Notification, Image } = require('../models');
 const auth = require("../middleware/auth");
+const listingMapper = require('../mappers/listings');
 
 const VALID_ORDER_STATUSES = ['pending', 'completed', 'cancelled'];
+
+// Helper function to map orders with mapped listings
+const mapOrders = (orders) => {
+  const isArray = Array.isArray(orders);
+  const orderList = isArray ? orders : [orders];
+  
+  const mapped = orderList.map(order => ({
+    ...order.toJSON(),
+    Listing: order.Listing ? listingMapper(order.Listing) : null,
+  }));
+  
+  return isArray ? mapped : mapped[0];
+};
 
 // Get all orders
 router.get('/', async (req, res) => {
@@ -14,7 +28,15 @@ router.get('/', async (req, res) => {
       include: [
         {
           model: Listing,
-          attributes: ['title', 'id'],
+          include: [
+            {
+              model: Image,
+              attributes: ['id', 'file_name'],
+            },
+            {
+              model: User,
+            },
+          ],
         },
         {
           model: User,
@@ -22,7 +44,7 @@ router.get('/', async (req, res) => {
         },
       ],
     });
-    res.json(orders);
+    res.json(mapOrders(orders));
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch orders' });
   }
@@ -37,7 +59,15 @@ router.get('/recent', async (req, res) => {
       include: [
         {
           model: Listing,
-          attributes: ['title', 'id'],
+          include: [
+            {
+              model: Image,
+              attributes: ['id', 'file_name'],
+            },
+            {
+              model: User,
+            },
+          ],
         },
         {
           model: User,
@@ -45,7 +75,7 @@ router.get('/recent', async (req, res) => {
         },
       ],
     });
-    res.json(recentOrders);
+    res.json(mapOrders(recentOrders));
   } catch (err) {
     console.log('Error fetching recent orders:', err);
     res.status(500).json({ error: 'Failed to fetch recent orders' });
@@ -75,7 +105,15 @@ router.get('/:id', auth, async (req, res) => {
       include: [
         {
           model: Listing,
-          attributes: ['title', 'id'],
+          include: [
+            {
+              model: Image,
+              attributes: ['id', 'file_name'],
+            },
+            {
+              model: User,
+            },
+          ],
         },
         {
           model: User,
@@ -85,7 +123,8 @@ router.get('/:id', auth, async (req, res) => {
     });
 
     if (!order) return res.status(404).json({ error: 'Order not found' });
-    res.json(order);
+    
+    res.json(mapOrders(order));
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch order' });
   }
@@ -115,6 +154,20 @@ router.post('/', async (req, res) => {
       });
     }
 
+    // Get the listing to find the seller
+    const listing = await Listing.findByPk(listing_id, {
+      include: [{ model: User, attributes: ['id', 'name', 'email'] }],
+    });
+
+    if (!listing) {
+      return res.status(404).json({ error: 'Listing not found' });
+    }
+
+    // Get buyer info
+    const buyer = await User.findByPk(buyer_id, {
+      attributes: ['id', 'name'],
+    });
+
     const order = await Orders.create({
       listing_id,
       buyer_id,
@@ -127,7 +180,47 @@ router.post('/', async (req, res) => {
       notes,
     });
 
-    res.status(201).json(order);
+    // Create notification for the seller (listing owner)
+    if (listing.User && listing.User.id !== buyer_id) {
+      try {
+        await Notification.create({
+          user_id: listing.User.id,
+          actor_id: buyer_id,
+          listing_id: listing_id,
+          type: 'order',
+          title: 'New Order Request',
+          content: `${buyer?.name || 'A buyer'} has placed an order for "${listing.title}" - Quantity: ${quantity}, Total: ${normalizedTotalPrice}`,
+          is_read: false,
+        });
+      } catch (notificationError) {
+        console.error('Error creating notification for seller:', notificationError);
+        // Continue anyway - don't fail the order creation if notification fails
+      }
+    }
+
+    // Fetch order with images for response
+    const createdOrder = await Orders.findByPk(order.id, {
+      include: [
+        {
+          model: Listing,
+          include: [
+            {
+              model: Image,
+              attributes: ['id', 'file_name'],
+            },
+            {
+              model: User,
+            },
+          ],
+        },
+        {
+          model: User,
+          attributes: ['name', 'email'],
+        },
+      ],
+    });
+
+    res.status(201).json(mapOrders(createdOrder));
   } catch (err) {
     res.status(400).json({ error: err.message || 'Failed to create order' });
   }
@@ -158,7 +251,29 @@ router.put('/:id/status', async (req, res) => {
       );
     }
 
-    res.json(order);
+    // Fetch updated order with images for response
+    const updatedOrder = await Orders.findByPk(order.id, {
+      include: [
+        {
+          model: Listing,
+          include: [
+            {
+              model: Image,
+              attributes: ['id', 'file_name'],
+            },
+            {
+              model: User,
+            },
+          ],
+        },
+        {
+          model: User,
+          attributes: ['name', 'email'],
+        },
+      ],
+    });
+
+    res.json(mapOrders(updatedOrder));
   } catch (err) {
     console.error('🔴 Update error details:', {
       message: err.message,
@@ -181,6 +296,62 @@ router.delete('/:id', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(400).json({ error: err.message || 'Failed to delete order' });
+  }
+});
+
+// Confirm and complete an order
+router.post('/:orderId/confirm-checkout', auth, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const userId = req.user.userId;
+
+    const order = await Orders.findByPk(orderId, {
+      include: [
+        {
+          model: Listing,
+          include: [
+            {
+              model: Image,
+              attributes: ['id', 'file_name'],
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    if (order.Listing.user_id !== userId) {
+      return res.status(403).json({ error: 'Forbidden: You are not the owner of this listing.' });
+    }
+
+    if (order.status === 'completed') {
+      return res.status(400).json({ error: 'Order is already completed.' });
+    }
+
+    // Update order and listing status
+    await order.update({ status: 'completed' });
+    await Listing.update(
+      { status: 'selled' },
+      { where: { id: order.listing_id } }
+    );
+
+    // Create notification for the buyer
+    await Notification.create({
+      user_id: order.buyer_id,
+      actor_id: userId,
+      listing_id: order.listing_id,
+      type: 'order_completed',
+      title: 'Order Completed!',
+      content: `Your order for "${order.Listing.title}" has been completed by the seller.`,
+    });
+
+    res.json({ success: true, message: 'Order completed successfully.' });
+  } catch (err) {
+    console.error('🔴 Order completion error:', err);
+    res.status(500).json({ error: 'Failed to complete order.' });
   }
 });
 

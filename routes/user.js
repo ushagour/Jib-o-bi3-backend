@@ -44,7 +44,7 @@ const upload = multer({
 
 // Helper function to get avatar URL
 const getAvatarUrl = (user) => {
-  const baseUrl = config.get("assetsBaseUrl");
+  const baseUrl = process.env.ASSETS_BASE_URL || "http://localhost:3000/assets/";
   
   // If avatar is null, use user's name as avatar
   if (!user.avatar) {
@@ -157,18 +157,36 @@ router.put("/:id", [auth,
     }
   }
 );
-// DELETE: Delete a user by ID
+// DELETE: Delete a user by ID (requires email verification and reason)
 router.delete("/:id", auth, async (req, res) => {
   const userId = parseInt(req.params.id);
+  const { email, reason } = req.body;
 
   try {
     const user = await User.findByPk(userId);
 
     if (!user) return res.status(404).send({ error: "User not found" });
 
+    // Verify email matches the user's email
+    if (!email || email !== user.email) {
+      return res.status(403).send({ 
+        error: "Email verification failed. Please provide the correct email associated with your account." 
+      });
+    }
+
+    // Validate reason is provided
+    if (!reason || typeof reason !== 'string' || reason.trim().length < 10) {
+      return res.status(400).send({ 
+        error: "Please provide a reason for account deletion (minimum 10 characters)." 
+      });
+    }
+
+    // Log the deletion reason for admin review (optional - could be saved to a deletion_log table)
+    console.log(`Account deletion requested by user ${userId} (${user.email}). Reason: ${reason}`);
+
     await user.destroy();
 
-    res.send({ message: "User deleted successfully" });
+    res.send({ message: "Your account has been deleted successfully." });
   } catch (error) {
     console.error("Error deleting user:", error);
     res.status(500).send({ error: "An error occurred while deleting the user" });

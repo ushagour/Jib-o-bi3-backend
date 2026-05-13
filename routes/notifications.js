@@ -17,7 +17,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'title and content are required' });
     }
 
-    if (!['message', 'review', 'like', 'listing_update'].includes(type)) {
+    if (!['message', 'review', 'like', 'listing_update', 'order'].includes(type)) {
       return res.status(400).json({ error: 'Invalid notification type' });
     }
 
@@ -51,7 +51,7 @@ router.get('/admin/all', async (req, res) => {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 500);
 
     const where = {};
-    if (type && ['message', 'review', 'like', 'listing_update'].includes(type)) {
+    if (type && ['message', 'review', 'like', 'listing_update', 'order'].includes(type)) {
       where.type = type;
     }
     if (unreadOnly) {
@@ -266,6 +266,45 @@ router.delete('/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting notification:', error);
     res.status(500).json({ error: 'Failed to delete notification' });
+  }
+});
+
+// Admin endpoint: create notification for any user (used for system notifications like orders)
+router.post('/admin/create-for-user', async (req, res) => {
+  try {
+    const { user_id, actor_id, type = 'message', title, content, listing_id = null } = req.body;
+
+    if (!user_id || !title || !content) {
+      return res.status(400).json({ 
+        error: 'user_id, title, and content are required' 
+      });
+    }
+
+    if (!['message', 'review', 'like', 'listing_update', 'order'].includes(type)) {
+      return res.status(400).json({ error: 'Invalid notification type' });
+    }
+
+    // Verify user exists
+    const targetUser = await User.findByPk(user_id);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Target user not found' });
+    }
+
+    const notification = await Notification.create({
+      user_id,
+      actor_id: actor_id || null,
+      listing_id,
+      type,
+      title,
+      content,
+      is_read: false,
+      read_at: null,
+    });
+
+    res.status(201).json(notification);
+  } catch (error) {
+    console.error('Error creating notification for user:', error);
+    res.status(500).json({ error: 'Failed to create notification' });
   }
 });
 

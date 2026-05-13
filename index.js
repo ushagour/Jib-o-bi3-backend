@@ -50,7 +50,7 @@ app.use("/api/settings", settings);
 
 // Sync database and start server
 sequelize.sync().then(() => {
-    const PORT = process.env.PORT || config.get("port");
+    const PORT = process.env.PORT || 3000;
     app.listen(PORT, () => {
         console.log(`Server is running on port ${PORT}`);
     });

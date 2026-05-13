@@ -80,7 +80,7 @@ router.post("/login", validateWith(Loginschema),async (req, res) => {
 
 
       const AvatarMapper = file_name => {
-          const baseUrl = config.get("assetsBaseUrl");
+          const baseUrl = process.env.ASSETS_BASE_URL || "http://localhost:3000/assets/";
         
           return  `${baseUrl}${file_name}.png`;
     

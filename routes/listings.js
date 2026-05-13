@@ -58,7 +58,7 @@ const addListingSchema = Joi.object({
 router.post(
   "/",
   [
-    upload.array("images", config.get("maxImageCount")), // Handle file uploads
+    upload.array("images", parseInt(process.env.MAX_IMAGE_COUNT) || 10), // Handle file uploads
     validateWith(addListingSchema), // Validate incoming data
     // validateCategoryId, // Ensure categoryId is valid
     imageResize, // Resize images if provided
@@ -145,7 +145,7 @@ router.post(
 router.put(
   "/:id",
   [
-    upload.array("images", config.get("maxImageCount")), // Handle file uploads
+    upload.array("images", parseInt(process.env.MAX_IMAGE_COUNT) || 10), // Handle file uploads
     validateWith(updateListingSchema), // Validate incoming data
     imageResize, // Resize images if provided
   ],
@@ -237,6 +237,84 @@ router.put(
   }
 );
 
+// Haversine formula to calculate distance between two points on Earth
+const getDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371; // Radius of the Earth in kilometers
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
+// Get listings near a given location
+router.get("/nearby", async (req, res) => {
+  try {
+    const { latitude, longitude, distance = 10 } = req.query; // Default distance is 10 km
+
+    if (!latitude || !longitude) {
+      return res
+        .status(400)
+        .json({ error: "Latitude and longitude are required." });
+    }
+
+    const lat = parseFloat(latitude);
+    const lon = parseFloat(longitude);
+    const dist = parseFloat(distance);
+
+    const listings = await Listing.findAll({
+    include: [
+        {
+          model: Image,
+          attributes: ['file_name'], // Include only the file_name attribute
+        },
+        {
+          model: User,
+          attributes: ['name'], // Include only the name attribute
+          attributes: { exclude: ["password"] }, // Exclude the password field
+
+        }, {
+          model: Category,
+          attributes: ['name', 'icon'], // Include only the name attribute
+        }
+
+      ],
+    });
+
+    const nearbyListings = listings
+      .map((listing) => {
+        if (listing.latitude && listing.longitude) {
+          const listingDistance = getDistance(
+            lat,
+            lon,
+            listing.latitude,
+            listing.longitude
+          );
+          if (listingDistance <= dist) {
+            return { ...listing.toJSON(), distance: listingDistance };
+          }
+        }
+        return null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.distance - b.distance);
+
+      // console.log('filterd nearby listings ', nearbyListings);
+      
+
+    const resources = nearbyListings.map(listingMapper);
+    res.status(200).json(resources);
+  } catch (error) {
+    console.error("Error fetching nearby listings:", error);
+    res.status(500).json({ error: "Internal server error." });
+  }
+});
+
 // Get all listings
 router.get("/", async(req, res) => {
   try {
@@ -296,6 +374,9 @@ router.get("/category/:categoryId", async (req, res) => {
         },
       ],
     });
+
+    const resources = listings.map(listingMapper);
+    res.status(200).json(resources);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -433,26 +514,44 @@ router.delete("/:id",auth, async (req, res) => {
 });
 
 
-//top listings
-router.get("/top",auth, async (req, res) => {
+// Top listings (popular by number of orders)
+router.get("/top", async (req, res) => {
   
   try {
-    const topListings = await Listing.findAll({
-      limit: 10,
-      order: [['createdAt', 'DESC']], // Order by created_at field in descending order
+    const listings = await Listing.findAll({
       include: [
         {
           model: Image,
           attributes: ['file_name'], // Include only the file_name attribute
         },
         {
+          model: Category,
+          attributes: ['id', 'name', 'icon'],
+        },
+        {
           model: User,
           attributes: ['name'], // Include only the name attribute
           attributes: { exclude: ["password"] }, // Exclude the password field
 
+        },
+        {
+          model: Orders,
+          attributes: ['id'],
+          required: false,
         }
       ],
     });
+
+    const topListings = listings
+      .slice()
+      .sort((a, b) => {
+        const ordersA = Array.isArray(a.Orders) ? a.Orders.length : 0;
+        const ordersB = Array.isArray(b.Orders) ? b.Orders.length : 0;
+
+        if (ordersB !== ordersA) return ordersB - ordersA;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      })
+      .slice(0, 10);
 
     const resources = topListings.map(listingMapper);
     res.status(200).json(resources);

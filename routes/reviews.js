@@ -33,7 +33,7 @@ router.get("/listing/:listingId", async (req, res) => {
 //reviews 
 router.get("/", async (req, res) => {
   try {
-    const assetsBaseUrl = config.get("assetsBaseUrl");
+    const assetsBaseUrl = process.env.ASSETS_BASE_URL || "http://localhost:3000/assets/";
 
     const reviews = await Reviews.findAll({
       include: [
