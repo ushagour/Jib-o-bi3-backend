@@ -27,12 +27,7 @@ const mapper = listing => {
     },
     images: listing.Images.map(mapImage), // Map all images
     imageUrl: listing.Images.length > 0 ? mapImage(listing.Images[0]).url : null,
-    thumbnailUrl: listing.Images.length > 0 ? mapImage(listing.Images[0]).thumbnailUrl : null,
-    // owner: {
-      // ...listing.User.toJSON(),
-      // isPhoneVerified: listing.User.is_phone_verified,
-      // isQuickResponder: listing.User.is_quick_responder,
-    // },   
+    thumbnailUrl: listing.Images.length > 0 ? mapImage(listing.Images[0]).thumbnailUrl : null,  
     owner: listing.User, 
     latitude: listing.latitude,
     longitude: listing.longitude,
