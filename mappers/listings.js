@@ -1,5 +1,4 @@
-const config = require("config");
-const { Category, Messages } = require("../models");
+const { Category } = require("../models");
 
 /**
  * Maps a listing object geted from the database and maps it to a more user-friendly format, 
@@ -8,7 +7,7 @@ const { Category, Messages } = require("../models");
  */
 
 const mapper = listing => {
-  const baseUrl = config.get("assetsBaseUrl");
+  const baseUrl = process.env.ASSETS_BASE_URL || "http://localhost:3000/assets/";
 
   const mapImage = image => ({
     url: `${baseUrl}${image.file_name}_full.jpg`,
@@ -28,18 +27,17 @@ const mapper = listing => {
     },
     images: listing.Images.map(mapImage), // Map all images
     imageUrl: listing.Images.length > 0 ? mapImage(listing.Images[0]).url : null,
-    thumbnailUrl: listing.Images.length > 0 ? mapImage(listing.Images[0]).thumbnailUrl : null,
-    owner: listing.User,   
+    thumbnailUrl: listing.Images.length > 0 ? mapImage(listing.Images[0]).thumbnailUrl : null,  
+    owner: listing.User, 
     latitude: listing.latitude,
     longitude: listing.longitude,
     status: listing.status,
     state: listing.status,
     createdAt: listing.createdAt,
-    Messages: listing.Messages ? listing.Messages.map(message => ({
-      content: message.content,
-      senderId: message.sender_id,
-      receiverId: message.receiver_id
-    })) : [],
+    carSize: listing.carSize,
+    carColor: listing.carColor,
+    carModel: listing.carModel,
+    carYear: listing.carYear,
     Reviews: listing.Reviews ? listing.Reviews.map(review => ({
       comment: review.comment,
       rating: review.rating

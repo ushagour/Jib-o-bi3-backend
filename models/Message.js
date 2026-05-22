@@ -1,13 +1,13 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../database/database');
 
-const Notification = sequelize.define('Notification', {
+const Message = sequelize.define('Message', {
   id: {
     type: DataTypes.INTEGER,
     primaryKey: true,
     autoIncrement: true,
   },
-  user_id: {
+  sender_id: {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
@@ -15,9 +15,9 @@ const Notification = sequelize.define('Notification', {
       key: 'id',
     },
   },
-  actor_id: {
+  recipient_id: {
     type: DataTypes.INTEGER,
-    allowNull: true,
+    allowNull: false,
     references: {
       model: 'Users',
       key: 'id',
@@ -30,17 +30,6 @@ const Notification = sequelize.define('Notification', {
       model: 'Listings',
       key: 'id',
     },
-  },
-  type: {
-    type: DataTypes.STRING,
-    allowNull: false,
-    validate: {
-      isIn: [['message', 'review', 'like', 'listing_update', 'order']],
-    },
-  },
-  title: {
-    type: DataTypes.STRING,
-    allowNull: false,
   },
   content: {
     type: DataTypes.TEXT,
@@ -66,4 +55,4 @@ const Notification = sequelize.define('Notification', {
   },
 });
 
-module.exports = Notification;
+module.exports = Message;

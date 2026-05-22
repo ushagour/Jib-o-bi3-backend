@@ -1,340 +1,183 @@
-const express = require("express");
-const router = express.Router();
-const Joi = require("joi");
-const { Expo } = require("expo-server-sdk");
+const express = require('express');
+const auth = require('../middleware/auth');
 const { Op } = require('sequelize');
+const { Message, User, Listing } = require('../models');
+const { sendPushNotification } = require('../utilities/pushNotifications');
 
-const sendPushNotification = require("../utilities/pushNotifications");
-const { createNotification } = require("../utilities/notifications");
-const auth = require("../middleware/auth");
-const validateWith = require("../middleware/validation");
-const { Listing, Image,User,Favorites,Reviews,Messages } = require("../models");//
-const c = require("config");
+const router = express.Router();
 
-
-const schema = Joi.object({
-  content: Joi.string().required(),
-  target_user: Joi.number().integer().required(),
-  id: Joi.number().integer().required(),
-});
-const expo = new Expo();
-// Apply auth middleware to all routes
 router.use(auth);
 
-//
+const buildMessageInclude = () => [
+  { model: User, as: 'sender', attributes: ['id', 'name', 'avatar'] },
+  { model: User, as: 'recipient', attributes: ['id', 'name', 'avatar'] },
+  { model: Listing, attributes: ['id', 'title'] },
+];
 
-
-// unread messages notification bil 
-router.get("/unread", async (req, res) => {
+router.get('/conversation/:otherUserId', async (req, res) => {
   try {
-    
- const userId = req.query.userId || (req.user && req.user.userId);
-    if (!userId) {
-      return res.status(400).send({ error: "Missing userId." });
+    const userId = req.user.userId;
+    const otherUserId = parseInt(req.params.otherUserId, 10);
+
+    if (!otherUserId || Number.isNaN(otherUserId)) {
+      return res.status(400).json({ error: 'Invalid otherUserId' });
     }
-        const unreadMessages = await Messages.findAll({
 
-
-         
+    const messages = await Message.findAll({
       where: {
-        receiver_id: userId,
-        is_read: false, // Assuming 'read' is a boolean field indicating if the message has been read
+        [Op.or]: [
+          { sender_id: userId, recipient_id: otherUserId },
+          { sender_id: otherUserId, recipient_id: userId },
+        ],
+      },
+      order: [['createdAt', 'ASC']],
+      include: buildMessageInclude(),
+    });
+
+    res.json({ ok: true, data: messages });
+  } catch (error) {
+    console.error('Error fetching conversation messages:', error);
+    res.status(500).json({ error: 'Failed to fetch conversation' });
+  }
+});
+
+router.get('/threads', async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    const messages = await Message.findAll({
+      where: {
+        [Op.or]: [{ sender_id: userId }, { recipient_id: userId }],
       },
       order: [['createdAt', 'DESC']],
-      include: [
-        {
-          model: User,
-          as: 'sender',
-          attributes: ['id', 'name', 'avatar'],
-        },
-        {
-          model: User,
-          as: 'receiver',
-          attributes: ['id', 'name', 'avatar'],
-        },
-        {
-          model: Listing,
-          attributes: ['id', 'title'],
-        },
-      ],
+      include: buildMessageInclude(),
     });
-    const resources = unreadMessages.map((message) => {
-      return {
-        id: message.id,
-        senderId: message.sender?.id,
-        receiverId: message.receiver?.id,
-        fromUser: message.sender.name,
-        toUser: message.receiver.name,
-        content: message.content,
-        avatar: message.sender.avatar,
-        listingId: message.listing_id,
-        listing: message.Listing ? { id: message.Listing.id, title: message.Listing.title } : null,
-        createdAt: message.createdAt,
-      };
+
+    const threadMap = new Map();
+
+    messages.forEach((message) => {
+      const senderId = String(message.sender_id);
+      const recipientId = String(message.recipient_id);
+      const otherUser = senderId === String(userId) ? message.recipient : message.sender;
+      const threadKey = senderId === String(userId)
+        ? `${senderId}:${recipientId}`
+        : `${recipientId}:${senderId}`;
+
+      if (!otherUser || threadMap.has(threadKey)) {
+        return;
+      }
+
+      threadMap.set(threadKey, {
+        id: otherUser.id,
+        name: otherUser.name || `User ${otherUser.id}`,
+        avatar: otherUser.avatar || null,
+        lastMessage: message.content,
+        time: message.createdAt,
+        unread: String(message.recipient_id) === String(userId) && !message.is_read,
+      });
     });
-    if (!unreadMessages.length) return res.status(204).send({ info: "No unread messages found." });
-    res.send(resources);
+
+    const threads = Array.from(threadMap.values()).sort(
+      (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime(),
+    );
+
+    res.json({ ok: true, data: threads });
   } catch (error) {
-    console.error("Error fetching unread messages:", error);
-    res.status(500).send({ error: "An error occurred while fetching unread messages." });
-  }
-}); 
-
-
-router.get("/:id", async(req, res) => {
-  try {
-    const user_id = req.user.userId;
-
-    const messages = await Messages.findAll({
-      where: { receiver_id: user_id? user_id : null },
-      order: [['createdAt', 'DESC']],
-      include: [
-        {
-          model: User,
-          as: 'sender',
-          attributes: ['id', 'name', 'avatar'], // Include only necessary attributes
-        },
-        {
-          model: User,
-          as: 'receiver',
-          attributes: ['id', 'name', 'avatar'], // Include only necessary attributes
-        },
-        {
-          model: Listing,
-          attributes: ['id', 'title'], // Include only necessary attributes
-        },
-      ],
-    });
-
-
-    const resources = messages.map((message) => {
-      return {
-        id: message.id,
-        senderId: message.sender?.id,
-        receiverId: message.receiver?.id,
-        fromUser: message.sender.name,
-        toUser: message.receiver.name,
-        content: message.content,
-        avatar: message.sender.avatar,
-        listingId: message.listing_id,
-        listing: message.Listing ? { id: message.Listing.id, title: message.Listing.title } : null,
-        createdAt: message.createdAt,
-      };
-    });
-
-    if (!messages.length) return res.status(404).send({ error: "Messages not found." });
-
-    res.send(resources);
-  } catch (error) {
-    console.error("Error fetching messages:", error);
-    res.status(500).send({ error: "An error occurred while fetching messages." });
+    console.error('Error fetching message threads:', error);
+    res.status(500).json({ error: 'Failed to fetch threads' });
   }
 });
 
-router.post("/", [auth, validateWith(schema)], async (req, res) => {
+router.post('/', async (req, res) => {
+  try {
+    const senderId = req.user.userId;
+    const recipientId = parseInt(req.body.recipientId ?? req.body.recipient_id, 10);
+    const content = typeof req.body.content === 'string' ? req.body.content.trim() : '';
+    const listingId = req.body.listingId ?? req.body.listing_id ?? null;
 
-  const { content, id, target_user } = req.body;
-
-  // Find the listing by ID
-  const listing = await Listing.findByPk(id);
-  if (!listing) {
-    console.log("Listing not found");
-    return res.status(400).send({ error: "Invalid listingId." });
-  }
-
-  // Find the target user by ID
-  const targetUser = await User.findOne({ where: { id: target_user } });
-  if (!targetUser || !targetUser.expoPushToken) {
-    console.log("Target user or Expo Push Token not found");
-    console.log(targetUser);
-    console.log("Missing Expo Push Token");
-
-    return res.status(400).send({ error: "Invalid target user or missing push token" });
-  }
-
-  // Create the new message in the database
-  const NewMessage = await Messages.create({
-    sender_id: req.user.userId,
-    receiver_id: targetUser.id,
-    listing_id: listing.id,
-    content: content,
-  });
-
-  await createNotification({
-    userId: targetUser.id,
-    actorId: req.user.userId,
-    listingId: listing.id,
-    type: "message",
-    title: `Message from ${req.user.name}`,
-    content,
-  });
-
-  // Prepare the notification details
-  const notificationDetails = {
-    title: `New message from ${req.user.name}`, // Sender's name
-    body: content, // Message content
-    data: {
-      messageId: NewMessage.id,
-      senderId: req.user.userId,
-      receiverId: targetUser.id,
-      listingId: listing.id,
-      listingTitle: listing.title,
-    },
-  };
-
-  // Extract the Expo Push Token for the target user
-  const expoPushToken = targetUser.expoPushToken;
-
-  // Send the push notification
-  if (Expo.isExpoPushToken(expoPushToken)) {
-    try {
-      await sendPushNotification(expoPushToken, notificationDetails);
-      // console.log("Push notification sent successfully");
-    } catch (error) {
-      console.error("Error sending push notification:", error);
+    if (!recipientId || Number.isNaN(recipientId)) {
+      return res.status(400).json({ error: 'recipientId is required' });
     }
-  } else {
-    console.log("Invalid Expo Push Token");
-  }
 
-  res.status(201).send(NewMessage);
+    if (!content) {
+      return res.status(400).json({ error: 'content is required' });
+    }
+
+    if (String(recipientId) === String(senderId)) {
+      return res.status(400).json({ error: 'Cannot send a message to yourself' });
+    }
+
+    const recipient = await User.findByPk(recipientId, {
+      attributes: ['id', 'name', 'avatar', 'expoPushToken'],
+    });
+
+    if (!recipient) {
+      return res.status(404).json({ error: 'Recipient not found' });
+    }
+
+    const sender = await User.findByPk(senderId, {
+      attributes: ['id', 'name', 'avatar'],
+    });
+
+    const message = await Message.create({
+      sender_id: senderId,
+      recipient_id: recipientId,
+      listing_id: listingId || null,
+      content,
+      is_read: false,
+      read_at: null,
+    });
+
+    const payload = await Message.findByPk(message.id, { include: buildMessageInclude() });
+
+    if (recipient.expoPushToken) {
+      try {
+        await sendPushNotification(recipient.expoPushToken, {
+          title: `New message from ${sender?.name || 'User'}`,
+          body: content,
+          data: {
+            messageId: message.id,
+            senderId,
+            recipientId,
+            listingId: listingId || null,
+            type: 'message',
+          },
+          priority: 'high',
+        });
+      } catch (pushError) {
+        console.warn('Failed to send message push notification:', pushError.message);
+      }
+    }
+
+    res.status(201).json({ ok: true, data: payload });
+  } catch (error) {
+    console.error('Error creating message:', error);
+    res.status(500).json({ error: 'Failed to create message' });
+  }
 });
 
-router.delete("/:id",async(req, res) => {
-  
-  const messageId = parseInt(req.params.id); // Extract the ID from the URL
-
+router.patch('/:id/read', async (req, res) => {
   try {
-    const message = await Messages.findByPk(messageId);
+    const userId = req.user.userId;
+    const message = await Message.findOne({
+      where: { id: req.params.id, recipient_id: userId },
+    });
+
     if (!message) {
-      return res.status(404).send({ error: "message not found." });
+      return res.status(404).json({ error: 'Message not found' });
     }
 
-    await message.destroy(); // Delete the message
-    res.status(200).send({ message: "message deleted successfully." });
+    if (!message.is_read) {
+      message.is_read = true;
+      message.read_at = new Date();
+      await message.save();
+    }
+
+    res.json({ ok: true, data: message });
   } catch (error) {
-    console.error("Error deleting message:", error);
-    res.status(500).send({ error: "An error occurred while deleting the message." });
-  } 
-
-});
-
-
-
-// Fetch all messages (admin/global)
-router.get("/", async (req, res) => {
-  try {
-    const messages = await Messages.findAll({
-      order: [['createdAt', 'DESC']],
-      include: [
-        {
-          model: User,
-          as: 'sender',
-          attributes: ['id', 'name', 'avatar'],
-        },
-        {
-          model: User,
-          as: 'receiver',
-          attributes: ['id', 'name', 'avatar'],
-        },
-        {
-          model: Listing,
-          attributes: ['id', 'title'],
-        },
-      ],
-    });
-
-    const resources = messages.map((message) => ({
-      id: message.id,
-      senderId: message.sender?.id,
-      receiverId: message.receiver?.id,
-      fromUser: message.sender?.name,
-      toUser: message.receiver?.name,
-      content: message.content,
-      is_read: message.is_read,
-      avatar: message.sender?.avatar,
-      listingId: message.listing_id,
-      listing: message.Listing ? { id: message.Listing.id, title: message.Listing.title } : null,
-      createdAt: message.createdAt,
-    }));
-
-    res.send(resources);
-  } catch (error) {
-    console.error("Error fetching all messages:", error);
-    res.status(500).send({ error: "An error occurred while fetching all messages." });
+    console.error('Error marking message read:', error);
+    res.status(500).json({ error: 'Failed to mark message as read' });
   }
 });
-
-// Fetch messages for a specific user (by userId param)
-router.get("/user/:userId", async (req, res) => {
-  try {
-    const userId = parseInt(req.params.userId);
-    const messages = await Messages.findAll({
-      where: {
-        receiver_id: userId,
-      },
-      order: [['createdAt', 'DESC']],
-      include: [
-        {
-          model: User,
-          as: 'sender',
-          attributes: ['id', 'name', 'avatar'],
-        },
-        {
-          model: User,
-          as: 'receiver',
-          attributes: ['id', 'name', 'avatar'],
-        },
-        {
-          model: Listing,
-          attributes: ['id', 'title'],
-        },
-      ],
-    });
-
-    const resources = messages.map((message) => ({
-      id: message.id,
-      senderId: message.sender?.id,
-      receiverId: message.receiver?.id,
-      fromUser: message.sender?.name,
-      toUser: message.receiver?.name,
-      content: message.content,
-      avatar: message.sender?.avatar,
-      listingId: message.listing_id,
-      listing: message.Listing ? { id: message.Listing.id, title: message.Listing.title } : null,
-      createdAt: message.createdAt,
-    }));
-
-    res.send(resources);
-  } catch (error) {
-    console.error("Error fetching user messages:", error);
-    res.status(500).send({ error: "An error occurred while fetching user messages." });
-  }
-});
-
-// Mark a message as read
-router.patch("/:id/read", async (req, res) => {
-  try {
-
-    
-
-    const message = await Messages.findByPk(req.params.id);
-
-
-    
-    if (!message) return res.status(404).json({ error: "Message not found" });
-
-    message.is_read = true;
-    await message.save();
-
-    res.status(200).json(message);
-  } catch (error) {
-    log("Error marking message as read:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-
-
 
 module.exports = router;

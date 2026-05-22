@@ -10,13 +10,17 @@ const Favorites = sequelize.define('Favorites', {
     user_id: {
         type: DataTypes.INTEGER,
         allowNull: false,
+        references: {
+          model: 'Users',
+          key: 'id',
+        },
     },
     listing_id: {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-          model: 'Listing',
-          key: 'listing_id',
+          model: 'Listings',
+          key: 'id',
         },
       },
 });

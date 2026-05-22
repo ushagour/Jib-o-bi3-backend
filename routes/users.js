@@ -11,7 +11,7 @@ router.use(auth);
 router.get("/", async (req, res) => {
   try {
     const users = await User.findAll({
-      where: { role: "customer" },
+      where: { role: "Customer" },
       include: [{ 
         model: Orders,
         attributes: ["id", "total_price", "createdAt"] // Include total_price and createdAt for calculations
@@ -25,7 +25,7 @@ router.get("/", async (req, res) => {
     }
 
     const AvatarMapper = (file_name) => {
-      const baseUrl = config.get("assetsBaseUrl");
+      const baseUrl = process.env.ASSETS_BASE_URL || "http://localhost:3000/assets/";
       return `${baseUrl}${file_name}_avatar.png`;
     };
 
@@ -75,7 +75,7 @@ router.get("/:id", async (req, res) => {
     if (!user) return res.status(404).send({ error: "User not found" });
 
     const AvatarMapper = (file_name) => {
-      const baseUrl = config.get("assetsBaseUrl");
+      const baseUrl = process.env.ASSETS_BASE_URL || "http://localhost:3000/assets/";
       return `${baseUrl}${file_name}_avatar.png`;
     };
 

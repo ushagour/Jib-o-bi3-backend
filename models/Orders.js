@@ -82,6 +82,11 @@ const Orders = sequelize.define('Orders', {
         allowNull: false,
         defaultValue: sequelize.literal('CURRENT_TIMESTAMP'),
     },
+    hasReviewed: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+    }
 });
 
 module.exports = Orders;

@@ -44,7 +44,7 @@ const upload = multer({
 
 // Helper function to get avatar URL
 const getAvatarUrl = (user) => {
-  const baseUrl = config.get("assetsBaseUrl");
+  const baseUrl = process.env.ASSETS_BASE_URL || "http://localhost:3000/assets/";
   
   // If avatar is null, use user's name as avatar
   if (!user.avatar) {
@@ -58,14 +58,12 @@ const getAvatarUrl = (user) => {
 
 // GET: Retrieve a user by ID
 router.get("/:id", auth, async (req, res) => {
-  console.log("Fetching user with ID:", req.params.id); // Debug log
   
 
   const userId = parseInt(req.params.id);
 
   try {
     const user = await User.findByPk(userId, {
-      attributes: ['id', 'name', 'email', 'avatar'],
       include: [
         {
           model: Listing,
@@ -86,11 +84,17 @@ router.get("/:id", auth, async (req, res) => {
       name: user.name,
       email: user.email,
       avatar: getAvatarUrl(user),
+      is_phone_verified: !!user.phone,
+      is_email_verified: user.is_email_verified || false,
+      is_quick_responder: user.is_quick_responder || false, // Assuming quick verification is the same as email verification for now
+      phone: user.phone || "",
+      role: user.role,
+      status: user.status,
       completedOrders: user.Orders.filter(order => order.status === 'completed').length,
       pendingOrders: user.Orders.filter(order => order.status === 'pending').length,
       reviewsCount: user.reviews ? user.reviews.length : 0,
       listingsCount: user.Listings ? user.Listings.length : 0,
-      phone: user.phone || "",
+      is_verified: user.is_verified || false,
     });
 
   } catch (error) {
@@ -133,9 +137,9 @@ router.put("/:id", [auth,
         avatar: req.body.avatar || existingUser.avatar,
       };
 
-      // If file uploaded, use the original filename from req.file
-      if (req.file) {
-        updatedUserData.avatar = req.file.filename;
+      // If file uploaded, use the processed filename from imageResize middleware
+      if (req.images && req.images.length > 0) {
+        updatedUserData.avatar = req.images[0] + "_full.jpg";
       }
       
 
@@ -150,6 +154,10 @@ router.put("/:id", [auth,
         name: existingUser.name,
         email: existingUser.email,
         avatar: getAvatarUrl(existingUser),
+        is_verified: existingUser.is_verified || false,
+        phone: existingUser.phone || "",
+        role: existingUser.role,
+        status: existingUser.status,
       });
     } catch (error) {
       console.error("Error updating user data :", error);
@@ -157,18 +165,36 @@ router.put("/:id", [auth,
     }
   }
 );
-// DELETE: Delete a user by ID
+// DELETE: Delete a user by ID (requires email verification and reason)
 router.delete("/:id", auth, async (req, res) => {
   const userId = parseInt(req.params.id);
+  const { email, reason } = req.body;
 
   try {
     const user = await User.findByPk(userId);
 
     if (!user) return res.status(404).send({ error: "User not found" });
 
+    // Verify email matches the user's email
+    if (!email || email !== user.email) {
+      return res.status(403).send({ 
+        error: "Email verification failed. Please provide the correct email associated with your account." 
+      });
+    }
+
+    // Validate reason is provided
+    if (!reason || typeof reason !== 'string' || reason.trim().length < 10) {
+      return res.status(400).send({ 
+        error: "Please provide a reason for account deletion (minimum 10 characters)." 
+      });
+    }
+
+    // Log the deletion reason for admin review (optional - could be saved to a deletion_log table)
+    console.log(`Account deletion requested by user ${userId} (${user.email}). Reason: ${reason}`);
+
     await user.destroy();
 
-    res.send({ message: "User deleted successfully" });
+    res.send({ message: "Your account has been deleted successfully." });
   } catch (error) {
     console.error("Error deleting user:", error);
     res.status(500).send({ error: "An error occurred while deleting the user" });
@@ -198,11 +224,15 @@ router.patch("/:id/role", auth, async (req, res) => {
     await user.update({ role });
 
     res.json({
+      message: `User role updated to ${role}`,
       id: user.id,
       name: user.name,
       email: user.email,
+      avatar: getAvatarUrl(user),
+      is_verified: user.is_verified || false,
+      phone: user.phone || "",
       role: user.role,
-      message: `User role updated to ${role}`,
+      status: user.status,
     });
   } catch (error) {
     console.error('Error updating user role:', error);
@@ -246,11 +276,57 @@ router.delete("/:id/avatar", auth, async (req, res) => {
       name: existingUser.name,
       email: existingUser.email,
       avatar: getAvatarUrl(existingUser), // Will return user's name when avatar is null
+      is_verified: existingUser.is_verified || false,
+      phone: existingUser.phone || "",
+      role: existingUser.role,
+      status: existingUser.status,
     });
 
   } catch (error) {
     console.error("Error deleting avatar:", error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// PATCH: Verify/Unverify user account (admin only)
+router.patch("/:id/verify", auth, async (req, res) => {
+  try {
+    // Only admins can verify accounts
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied. Admin only.' });
+    }
+
+    const userId = parseInt(req.params.id);
+    const { verified } = req.body;
+
+    if (typeof verified !== 'boolean') {
+      return res.status(400).json({ error: 'Invalid request. "verified" must be true or false.' });
+    }
+
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Update verification status
+    await user.update({ is_verified: verified });
+
+    console.log(`User ${userId} (${user.email}) verification status updated to: ${verified}`);
+
+    res.status(200).json({
+      message: `Account ${verified ? 'verified' : 'unverified'} successfully`,
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      avatar: getAvatarUrl(user),
+      is_verified: user.is_verified,
+      phone: user.phone || "",
+      role: user.role,
+      status: user.status,
+    });
+  } catch (error) {
+    console.error('Error updating verification status:', error);
+    res.status(500).json({ error: 'Failed to update verification status' });
   }
 });
 

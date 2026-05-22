@@ -45,6 +45,31 @@ const User = sequelize.define('User', {
             type: DataTypes.ENUM('admin','Customer'),
             defaultValue: 'Customer',
         },
+        is_verified: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false,
+        },
+        is_phone_verified: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false,
+        },
+        is_quick_responder: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false,
+        },
+        is_email_verified: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false,
+        },
+        resetPasswordToken: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        resetPasswordExpires: {
+            type: DataTypes.DATE,
+            allowNull: true,
+        }
+
      
     });
 

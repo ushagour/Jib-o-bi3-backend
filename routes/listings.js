@@ -10,7 +10,7 @@ const auth = require("../middleware/auth");
 const imageResize = require("../middleware/imageResize");
 const delay = require("../middleware/delay");
 const listingMapper = require("../mappers/listings");
-const { sequelize, Listing, Image, User, Favorites, Reviews, Messages, Category, Orders, Notification } = require("../models");
+const { sequelize, Listing, Image, User, Favorites, Reviews, Category, Orders, Notification } = require("../models");
 const config = require("config");
 const { createListingUpdateNotifications } = require("../utilities/notifications");
 
@@ -24,8 +24,12 @@ const updateListingSchema = Joi.object({
   title: Joi.string().optional(),
   description: Joi.string().allow("").optional(),
   price: Joi.number().min(1).optional(),
-  status: Joi.string().optional(),
+  status: Joi.string().valid('selled', 'still available').optional(),
   category_id: Joi.string().optional(),
+  carSize: Joi.string().optional().allow(null, ""),
+  carColor: Joi.string().optional().allow(null, ""),
+  carModel: Joi.string().optional().allow(null, ""),
+  carYear: Joi.number().optional().allow(null, ""),
   location: Joi.object({
     latitude: Joi.number().optional(),
     longitude: Joi.number().optional(),
@@ -38,6 +42,10 @@ const addListingSchema = Joi.object({
   price: Joi.number().required().min(1),
   category_id: Joi.string().required(),
   user_id: Joi.required(),
+  carSize: Joi.string().optional().allow(null, ""),
+  carColor: Joi.string().optional().allow(null, ""),
+  carModel: Joi.string().optional().allow(null, ""),
+  carYear: Joi.number().optional().allow(null, ""),
   latitude: Joi.number().optional().allow(null, ""),
   longitude: Joi.number().optional().allow(null, ""),
   location: Joi.object({
@@ -50,7 +58,7 @@ const addListingSchema = Joi.object({
 router.post(
   "/",
   [
-    upload.array("images", config.get("maxImageCount")), // Handle file uploads
+    upload.array("images", parseInt(process.env.MAX_IMAGE_COUNT) || 10), // Handle file uploads
     validateWith(addListingSchema), // Validate incoming data
     // validateCategoryId, // Ensure categoryId is valid
     imageResize, // Resize images if provided
@@ -63,6 +71,10 @@ router.post(
         description,
         price,
         category_id,
+        carSize,
+        carColor,
+        carModel,
+        carYear,
         latitude: latitudeRaw,
         longitude: longitudeRaw,
         location,
@@ -103,6 +115,10 @@ router.post(
         description,
         price,
         category_id,
+        carSize: carSize || null,
+        carColor: carColor || null,
+        carModel: carModel || null,
+        carYear: carYear || null,
         latitude,
         longitude,
       });
@@ -129,7 +145,7 @@ router.post(
 router.put(
   "/:id",
   [
-    upload.array("images", config.get("maxImageCount")), // Handle file uploads
+    upload.array("images", parseInt(process.env.MAX_IMAGE_COUNT) || 10), // Handle file uploads
     validateWith(updateListingSchema), // Validate incoming data
     imageResize, // Resize images if provided
   ],
@@ -152,6 +168,10 @@ router.put(
         status: req.body.status || existingListing.status,
         category_id: req.body.category_id ? parseInt(req.body.category_id):existingListing.category_id,
         description: req.body.description || existingListing.description,
+        carSize: req.body.carSize !== undefined ? req.body.carSize : existingListing.carSize,
+        carColor: req.body.carColor !== undefined ? req.body.carColor : existingListing.carColor,
+        carModel: req.body.carModel !== undefined ? req.body.carModel : existingListing.carModel,
+        carYear: req.body.carYear !== undefined ? req.body.carYear : existingListing.carYear,
       };
 
       const changes = {
@@ -161,6 +181,15 @@ router.put(
         category_id: updatedListing.category_id !== existingListing.category_id,
         description: updatedListing.description !== existingListing.description,
       };
+
+      const carFieldsChanged = updatedListing.carSize !== existingListing.carSize ||
+        updatedListing.carColor !== existingListing.carColor ||
+        updatedListing.carModel !== existingListing.carModel ||
+        updatedListing.carYear !== existingListing.carYear;
+
+      if (carFieldsChanged) {
+        changes.carDetails = true;
+      }
 
       // console.log("Updated listing data:", updatedListing); // Log the updated listing data
       
@@ -208,6 +237,84 @@ router.put(
   }
 );
 
+// Haversine formula to calculate distance between two points on Earth
+const getDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371; // Radius of the Earth in kilometers
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
+// Get listings near a given location
+router.get("/nearby", async (req, res) => {
+  try {
+    const { latitude, longitude, distance = 10 } = req.query; // Default distance is 10 km
+
+    if (!latitude || !longitude) {
+      return res
+        .status(400)
+        .json({ error: "Latitude and longitude are required." });
+    }
+
+    const lat = parseFloat(latitude);
+    const lon = parseFloat(longitude);
+    const dist = parseFloat(distance);
+
+    const listings = await Listing.findAll({
+    include: [
+        {
+          model: Image,
+          attributes: ['file_name'], // Include only the file_name attribute
+        },
+        {
+          model: User,
+          attributes: ['name'], // Include only the name attribute
+          attributes: { exclude: ["password"] }, // Exclude the password field
+
+        }, {
+          model: Category,
+          attributes: ['name', 'icon'], // Include only the name attribute
+        }
+
+      ],
+    });
+
+    const nearbyListings = listings
+      .map((listing) => {
+        if (listing.latitude && listing.longitude) {
+          const listingDistance = getDistance(
+            lat,
+            lon,
+            listing.latitude,
+            listing.longitude
+          );
+          if (listingDistance <= dist) {
+            return { ...listing.toJSON(), distance: listingDistance };
+          }
+        }
+        return null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.distance - b.distance);
+
+      // console.log('filterd nearby listings ', nearbyListings);
+      
+
+    const resources = nearbyListings.map(listingMapper);
+    res.status(200).json(resources);
+  } catch (error) {
+    console.error("Error fetching nearby listings:", error);
+    res.status(500).json({ error: "Internal server error." });
+  }
+});
+
 // Get all listings
 router.get("/", async(req, res) => {
   try {
@@ -225,10 +332,6 @@ router.get("/", async(req, res) => {
           attributes: ['name'], // Include only the name attribute
           attributes: { exclude: ["password"] }, // Exclude the password field
 
-        },
-        {
-          model: Messages,
-          attributes: ['content', 'sender_id', 'receiver_id'], // Include content, sender_id, and receiver_id attributes
         }, {
           model: Category,
           attributes: ['name', 'icon'], // Include only the name attribute
@@ -266,10 +369,6 @@ router.get("/category/:categoryId", async (req, res) => {
           attributes: { exclude: ["password"] },
         },
         {
-          model: Messages,
-          attributes: ["content", "sender_id", "receiver_id"],
-        },
-        {
           model: Category,
           attributes: ["id", "name", "icon"],
         },
@@ -277,7 +376,6 @@ router.get("/category/:categoryId", async (req, res) => {
     });
 
     const resources = listings.map(listingMapper);
-
     res.status(200).json(resources);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -309,16 +407,11 @@ router.get("/detail/:id", async (req, res) => {
           attributes: ['comment', 'rating'], // Include content and rating attributes
         },
         {
-          model: Messages,
-          attributes: ['content', 'sender_id', 'receiver_id'], // Include content, sender_id, and receiver_id attributes
-        },
-        {
           model: Category,
           attributes: ['name', 'id'], // Include only the name attribute
         }
-
       ],
-    });
+    }); 
     //cheacks if the listing is existent in the database
     if (!listing) {
       console.log("Listing not found");
@@ -377,7 +470,7 @@ router.delete("/:id",auth, async (req, res) => {
 
   try {
     const listing = await Listing.findByPk(listing_id, {
-      include: [Image, Favorites, Reviews, Messages], // Include associated images
+        include: [Image, Favorites, Reviews], // Include associated images
     });
 
     if (!listing) {
@@ -392,8 +485,7 @@ router.delete("/:id",auth, async (req, res) => {
       // Delete records in all associated tables that reference this listing
       await Image.destroy({ where: { listing_id: listing.id }, transaction });
       await Favorites.destroy({ where: { listing_id: listing.id }, transaction });
-      await Reviews.destroy({ where: { listing_id: listing.id }, transaction });
-      await Messages.destroy({ where: { listing_id: listing.id }, transaction });
+        await Reviews.destroy({ where: { listing_id: listing.id }, transaction, individualHooks: true });
       await Orders.destroy({ where: { listing_id: listing.id }, transaction });
       await Notification.destroy({ where: { listing_id: listing.id }, transaction });
 
@@ -422,33 +514,134 @@ router.delete("/:id",auth, async (req, res) => {
 });
 
 
-//top listings
-router.get("/top",auth, async (req, res) => {
+// Top listings (popular by number of orders)
+router.get("/top", async (req, res) => {
   
   try {
-    const topListings = await Listing.findAll({
-      limit: 10,
-      order: [['createdAt', 'DESC']], // Order by created_at field in descending order
+    const listings = await Listing.findAll({
       include: [
         {
           model: Image,
           attributes: ['file_name'], // Include only the file_name attribute
         },
         {
+          model: Category,
+          attributes: ['id', 'name', 'icon'],
+        },
+        {
           model: User,
           attributes: ['name'], // Include only the name attribute
           attributes: { exclude: ["password"] }, // Exclude the password field
 
+        },
+        {
+          model: Orders,
+          attributes: ['id'],
+          required: false,
         }
       ],
     });
+
+    const topListings = listings
+      .slice()
+      .sort((a, b) => {
+        const ordersA = Array.isArray(a.Orders) ? a.Orders.length : 0;
+        const ordersB = Array.isArray(b.Orders) ? b.Orders.length : 0;
+
+        if (ordersB !== ordersA) return ordersB - ordersA;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      })
+      .slice(0, 10);
 
     const resources = topListings.map(listingMapper);
     res.status(200).json(resources);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
-}); 
+});
+
+// Update AI score for a listing (admin only)
+router.put("/:id/ai-score", auth, async (req, res) => {
+  try {
+    const { ai_score } = req.body;
+    const listingId = parseInt(req.params.id);
+
+    // Validate AI score
+    if (ai_score !== null && ai_score !== undefined) {
+      if (typeof ai_score !== 'number' || ai_score < 0 || ai_score > 100) {
+        return res.status(400).json({ error: "AI score must be between 0 and 100, or null" });
+      }
+    }
+
+    const listing = await Listing.findByPk(listingId);
+    
+    if (!listing) {
+      return res.status(404).json({ error: "Listing not found" });
+    }
+
+    // Update AI score and timestamp
+    await listing.update({
+      ai_score: ai_score || null,
+      ai_score_updated_at: ai_score !== null && ai_score !== undefined ? new Date() : null,
+    });
+
+    res.status(200).json({
+      id: listing.id,
+      ai_score: listing.ai_score,
+      ai_score_updated_at: listing.ai_score_updated_at,
+      title: listing.title,
+      message: "AI score updated successfully"
+    });
+  } catch (error) {
+    console.error("Error updating AI score:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get listings with AI scores (for admin dashboard)
+router.get("/admin/ai-scores", auth, async (req, res) => {
+  try {
+    const { sortBy = "ai_score", order = "DESC", limit = 100, offset = 0 } = req.query;
+    
+    const validSortFields = ["ai_score", "createdAt", "title", "price"];
+    const sortField = validSortFields.includes(sortBy) ? sortBy : "ai_score";
+    const sortOrder = ["ASC", "DESC"].includes(String(order).toUpperCase()) ? order : "DESC";
+
+    const listings = await Listing.findAll({
+      attributes: ["id", "title", "price", "ai_score", "ai_score_updated_at", "status", "createdAt"],
+      include: [
+        {
+          model: User,
+          attributes: ["id", "name", "email"],
+        },
+        {
+          model: Category,
+          attributes: ["id", "name"],
+        },
+        {
+          model: Image,
+          attributes: ["file_name"],
+          limit: 1,
+        },
+      ],
+      order: [[sortField, sortOrder]],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+    });
+
+    const total = await Listing.count();
+
+    res.status(200).json({
+      data: listings.map(listingMapper),
+      total,
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+    });
+  } catch (error) {
+    console.error("Error fetching AI scores:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 
 module.exports = router;

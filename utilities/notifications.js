@@ -1,5 +1,6 @@
 const { Op } = require('sequelize');
-const { Notification, Favorites, Messages, Orders } = require('../models');
+const { Notification, Favorites, Orders, User } = require('../models');
+const { sendPushNotification, sendPushNotificationBatch } = require('./pushNotifications');
 
 async function createNotification({
   userId,
@@ -11,14 +12,42 @@ async function createNotification({
 }) {
   if (!userId || !type || !title || !content) return null;
 
-  return Notification.create({
-    user_id: userId,
-    actor_id: actorId,
-    listing_id: listingId,
-    type,
-    title,
-    content,
-  });
+  try {
+    // Create the notification in database
+    const notification = await Notification.create({
+      user_id: userId,
+      actor_id: actorId,
+      listing_id: listingId,
+      type,
+      title,
+      content,
+    });
+
+    // Try to send push notification
+    const recipient = await User.findByPk(userId);
+    if (recipient && recipient.expoPushToken) {
+      try {
+        await sendPushNotification(recipient.expoPushToken, {
+          title: title,
+          body: content,
+          data: {
+            notificationId: notification.id,
+            type: type,
+            listingId: listingId || null,
+          },
+          priority: 'high',
+        });
+      } catch (pushError) {
+        console.warn(`Failed to send push notification to user ${userId}:`, pushError.message);
+        // Don't fail the notification creation if push fails
+      }
+    }
+
+    return notification;
+  } catch (error) {
+    console.error('Error creating notification:', error);
+    throw error;
+  }
 }
 
 function buildListingUpdateSummary(changes) {
@@ -41,12 +70,8 @@ async function createListingUpdateNotifications({ listingId, actorId, listingTit
   const summary = buildListingUpdateSummary(changes);
   if (!summary) return 0;
 
-  const [favorites, messages, orders] = await Promise.all([
+  const [favorites, orders] = await Promise.all([
     Favorites.findAll({ where: { listing_id: listingId }, attributes: ['user_id'] }),
-    Messages.findAll({
-      where: { listing_id: listingId },
-      attributes: ['sender_id', 'receiver_id'],
-    }),
     Orders.findAll({ where: { listing_id: listingId }, attributes: ['buyer_id'] }),
   ]);
 
@@ -54,14 +79,12 @@ async function createListingUpdateNotifications({ listingId, actorId, listingTit
 
   favorites.forEach((row) => recipients.add(row.user_id));
   orders.forEach((row) => recipients.add(row.buyer_id));
-  messages.forEach((row) => {
-    recipients.add(row.sender_id);
-    recipients.add(row.receiver_id);
-  });
 
   recipients.delete(actorId);
   recipients.delete(null);
   recipients.delete(undefined);
+
+  if (recipients.size === 0) return 0;
 
   const rows = Array.from(recipients).map((userId) => ({
     user_id: userId,
@@ -72,10 +95,43 @@ async function createListingUpdateNotifications({ listingId, actorId, listingTit
     content: summary,
   }));
 
-  if (!rows.length) return 0;
+  try {
+    // Create all notifications
+    await Notification.bulkCreate(rows);
 
-  await Notification.bulkCreate(rows);
-  return rows.length;
+    // Get push tokens for all recipients
+    const users = await User.findAll({
+      where: { id: Array.from(recipients) },
+      attributes: ['id', 'expoPushToken'],
+    });
+
+    const pushTokens = users
+      .filter((user) => user.expoPushToken)
+      .map((user) => user.expoPushToken);
+
+    // Send batch push notifications
+    if (pushTokens.length > 0) {
+      try {
+        await sendPushNotificationBatch(pushTokens, {
+          title: `Listing updated: ${listingTitle}`,
+          body: summary,
+          data: {
+            type: 'listing_update',
+            listingId: listingId,
+          },
+          priority: 'high',
+        });
+      } catch (pushError) {
+        console.warn('Failed to send batch push notifications:', pushError.message);
+        // Don't fail the notification creation if push fails
+      }
+    }
+
+    return rows.length;
+  } catch (error) {
+    console.error('Error creating listing update notifications:', error);
+    throw error;
+  }
 }
 
 module.exports = {

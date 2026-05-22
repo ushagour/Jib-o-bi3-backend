@@ -33,7 +33,7 @@ router.get("/listing/:listingId", async (req, res) => {
 //reviews 
 router.get("/", async (req, res) => {
   try {
-    const assetsBaseUrl = config.get("assetsBaseUrl");
+    const assetsBaseUrl = process.env.ASSETS_BASE_URL || "http://localhost:3000/assets/";
 
     const reviews = await Reviews.findAll({
       include: [
@@ -86,7 +86,7 @@ router.post("/", async (req, res) => {
   }
 
   try {
-    const newReview = await Reviews.create({
+      const newReview = await Reviews.create({
       comment: content,
       rating,
       user_id: userId,
@@ -120,11 +120,16 @@ router.post("/", async (req, res) => {
 });
 router.delete("/:id", async (req, res) => {
   const reviewId = req.params.id;
+  const userId = req.user.userId;
 
   try {
     const review = await Reviews.findByPk(reviewId);
     if (!review) {
       return res.status(404).send({ error: "Review not found." });
+    }
+
+    if (String(review.user_id) !== String(userId)) {
+      return res.status(403).send({ error: "Only the review owner can delete this review." });
     }
 
     await review.destroy();

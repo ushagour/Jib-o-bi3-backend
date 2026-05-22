@@ -11,7 +11,7 @@ const Reviews = sequelize.define('Reviews', {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-          model: 'User',
+          model: 'Users',
           key: 'id',
         },
     },
@@ -19,8 +19,8 @@ const Reviews = sequelize.define('Reviews', {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-          model: 'Listing',
-          key: 'listing_id',
+          model: 'Listings',
+          key: 'id',
         },
       },
     rating: {

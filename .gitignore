@@ -11,3 +11,12 @@ debug.log
 node_modules/
 .env
 db.sqlite
+
+database/*
+database/database.js
+database/development.sqlite
+database/migrations/001-initial-schema.sql
+database/development.sqlite
+.env
+.env.example
+database/*
