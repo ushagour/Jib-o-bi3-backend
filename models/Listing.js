@@ -53,6 +53,21 @@ const Listing = sequelize.define('Listing', {
         type: DataTypes.INTEGER,
         allowNull: true, // Optional car field
     },
+    ai_score: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        defaultValue: null,
+        validate: {
+            min: 0,
+            max: 100,
+        },
+        comment: 'AI quality/ranking score (0-100)',
+    },
+    ai_score_updated_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        comment: 'Timestamp of last AI score update',
+    },
 });
 
 module.exports = Listing;

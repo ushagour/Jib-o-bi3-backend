@@ -5,6 +5,7 @@ const Orders = require('../models/Orders');
 const { Listing, User, Notification, Image } = require('../models');
 const auth = require("../middleware/auth");
 const listingMapper = require('../mappers/listings');
+const { notifyUser } = require('../utilities/notificationService');
 
 const VALID_ORDER_STATUSES = ['pending', 'completed', 'cancelled'];
 
@@ -183,19 +184,39 @@ router.post('/', async (req, res) => {
     // Create notification for the seller (listing owner)
     if (listing.User && listing.User.id !== buyer_id) {
       try {
-        await Notification.create({
-          user_id: listing.User.id,
-          actor_id: buyer_id,
-          listing_id: listing_id,
+        await notifyUser({
+          userId: listing.User.id,
+          actorId: buyer_id,
+          listingId: listing_id,
           type: 'order',
-          title: 'New Order Request',
-          content: `${buyer?.name || 'A buyer'} has placed an order for "${listing.title}" - Quantity: ${quantity}, Total: ${normalizedTotalPrice}`,
-          is_read: false,
+          title: 'New Order Request - Pending',
+          content: `${buyer?.name || 'A buyer'} placed an order for "${listing.title}" - Qty: ${quantity}, Total: ${normalizedTotalPrice}. Order is pending approval.`,
+          data: {
+            orderId: order.id,
+            orderStatus: 'pending',
+          },
         });
       } catch (notificationError) {
-        console.error('Error creating notification for seller:', notificationError);
-        // Continue anyway - don't fail the order creation if notification fails
+        console.error('Error creating seller notification:', notificationError);
       }
+    }
+
+    // Notify the buyer that their order is pending
+    try {
+      await notifyUser({
+        userId: buyer_id,
+        actorId: listing.User?.id,
+        listingId: listing_id,
+        type: 'order',
+        title: 'Order Placed - Pending',
+        content: `Your order for "${listing.title}" has been placed and is pending approval from the seller.`,
+        data: {
+          orderId: order.id,
+          orderStatus: 'pending',
+        },
+      });
+    } catch (notificationError) {
+      console.error('Error creating buyer notification:', notificationError);
     }
 
     // Fetch order with images for response
@@ -237,11 +258,25 @@ router.put('/:id/status', async (req, res) => {
       });
     }
 
-    const order = await Orders.findByPk(req.params.id);
+    const order = await Orders.findByPk(req.params.id, {
+      include: [
+        {
+          model: Listing,
+          attributes: ['id', 'title', 'user_id'],
+          include: [{ model: User, attributes: ['id', 'name'] }],
+        },
+        {
+          model: User,
+          attributes: ['id', 'name', 'email'],
+        },
+      ],
+    });
+
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
 
+    const oldStatus = order.status;
     await order.update({ status });
 
     if (status === 'completed') {
@@ -249,6 +284,59 @@ router.put('/:id/status', async (req, res) => {
         { status: 'selled' },
         { where: { id: order.listing_id } }
       );
+    }
+
+    // Send notifications for status changes
+    const statusMessages = {
+      pending: `Your order for "${order.Listing.title}" is pending approval from the seller.`,
+      completed: `Your order for "${order.Listing.title}" has been completed! Thank you for your purchase.`,
+      cancelled: `Your order for "${order.Listing.title}" has been cancelled. Please contact the seller for details.`,
+    };
+
+    const sellerStatusMessages = {
+      pending: `New order pending: "${order.Listing.title}" from ${order.User?.name || 'a buyer'}. Qty: ${order.quantity}`,
+      completed: `Order #${order.id} for "${order.Listing.title}" has been completed.`,
+      cancelled: `Order #${order.id} for "${order.Listing.title}" has been cancelled.`,
+    };
+
+    // Notify buyer about status change
+    if (oldStatus !== status) {
+      try {
+        await notifyUser({
+          userId: order.buyer_id,
+          actorId: order.Listing.user_id,
+          listingId: order.listing_id,
+          type: 'order',
+          title: `Order Status Updated - ${status.charAt(0).toUpperCase() + status.slice(1)}`,
+          content: statusMessages[status] || `Order status updated to ${status}`,
+          data: {
+            orderId: order.id,
+            orderStatus: status,
+            previousStatus: oldStatus,
+          },
+        });
+      } catch (notificationError) {
+        console.error('Error notifying buyer of status change:', notificationError);
+      }
+
+      // Also notify seller about status change
+      try {
+        await notifyUser({
+          userId: order.Listing.user_id,
+          actorId: order.buyer_id,
+          listingId: order.listing_id,
+          type: 'order',
+          title: `Order Status Changed - ${status.charAt(0).toUpperCase() + status.slice(1)}`,
+          content: sellerStatusMessages[status] || `Order status changed to ${status}`,
+          data: {
+            orderId: order.id,
+            orderStatus: status,
+            previousStatus: oldStatus,
+          },
+        });
+      } catch (notificationError) {
+        console.error('Error notifying seller of status change:', notificationError);
+      }
     }
 
     // Fetch updated order with images for response

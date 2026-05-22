@@ -45,11 +45,22 @@ router.get('/', async (req, res) => {
     });
     const totalRevenue = orders.reduce((sum, order) => sum + (parseFloat(order.total_price) || 0), 0);
 
+    const recentOrders = await Orders.findAll({
+      include: [
+        { model: User, attributes: ['id', 'name', 'email'] },
+        { model: Listing, attributes: ['id', 'title', 'price'] }
+      ],
+      order: [['createdAt', 'DESC']],
+      limit: 10,
+      raw: false
+    });
+
     const stats = {
       totalListings,
       totalUsers,
       totalOrders,
       totalRevenue,
+      recentOrders,
       topListings
     };
 

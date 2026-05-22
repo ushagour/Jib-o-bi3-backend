@@ -98,7 +98,7 @@ router.post("/", async (req, res) => {
         listingId: listing.id,
         type: "like",
         title: "New like on your listing",
-        content: `Someone liked your listing: ${listing.title}`,
+        content: `${req.user.username} liked your listing: ${listing.title}`,
       });
     }
 

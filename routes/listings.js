@@ -558,7 +558,90 @@ router.get("/top", async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
-}); 
+});
+
+// Update AI score for a listing (admin only)
+router.put("/:id/ai-score", auth, async (req, res) => {
+  try {
+    const { ai_score } = req.body;
+    const listingId = parseInt(req.params.id);
+
+    // Validate AI score
+    if (ai_score !== null && ai_score !== undefined) {
+      if (typeof ai_score !== 'number' || ai_score < 0 || ai_score > 100) {
+        return res.status(400).json({ error: "AI score must be between 0 and 100, or null" });
+      }
+    }
+
+    const listing = await Listing.findByPk(listingId);
+    
+    if (!listing) {
+      return res.status(404).json({ error: "Listing not found" });
+    }
+
+    // Update AI score and timestamp
+    await listing.update({
+      ai_score: ai_score || null,
+      ai_score_updated_at: ai_score !== null && ai_score !== undefined ? new Date() : null,
+    });
+
+    res.status(200).json({
+      id: listing.id,
+      ai_score: listing.ai_score,
+      ai_score_updated_at: listing.ai_score_updated_at,
+      title: listing.title,
+      message: "AI score updated successfully"
+    });
+  } catch (error) {
+    console.error("Error updating AI score:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get listings with AI scores (for admin dashboard)
+router.get("/admin/ai-scores", auth, async (req, res) => {
+  try {
+    const { sortBy = "ai_score", order = "DESC", limit = 100, offset = 0 } = req.query;
+    
+    const validSortFields = ["ai_score", "createdAt", "title", "price"];
+    const sortField = validSortFields.includes(sortBy) ? sortBy : "ai_score";
+    const sortOrder = ["ASC", "DESC"].includes(String(order).toUpperCase()) ? order : "DESC";
+
+    const listings = await Listing.findAll({
+      attributes: ["id", "title", "price", "ai_score", "ai_score_updated_at", "status", "createdAt"],
+      include: [
+        {
+          model: User,
+          attributes: ["id", "name", "email"],
+        },
+        {
+          model: Category,
+          attributes: ["id", "name"],
+        },
+        {
+          model: Image,
+          attributes: ["file_name"],
+          limit: 1,
+        },
+      ],
+      order: [[sortField, sortOrder]],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+    });
+
+    const total = await Listing.count();
+
+    res.status(200).json({
+      data: listings.map(listingMapper),
+      total,
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+    });
+  } catch (error) {
+    console.error("Error fetching AI scores:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 
 module.exports = router;

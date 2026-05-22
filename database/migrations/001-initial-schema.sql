@@ -20,10 +20,13 @@ CREATE TABLE IF NOT EXISTS Users (
   status TEXT CHECK(status IN ('active', 'inactive', 'banned')) DEFAULT 'active',
   password TEXT NOT NULL,
   expoPushToken TEXT,
+  is_verified BOOLEAN DEFAULT 0,
   role TEXT CHECK(role IN ('admin', 'Customer')) DEFAULT 'Customer',
-  is_phone_verified INTEGER DEFAULT 0,
-  is_quick_responder INTEGER DEFAULT 0,
-  is_email_verified INTEGER DEFAULT 0,
+  is_phone_verified BOOLEAN DEFAULT 0,
+  is_quick_responder BOOLEAN DEFAULT 0,
+  is_email_verified BOOLEAN DEFAULT 0,
+  resetPasswordToken TEXT,
+  resetPasswordExpires DATETIME,
   createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
   updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -169,3 +172,44 @@ CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON Notifications(is_read);
 CREATE INDEX IF NOT EXISTS idx_images_listing_id ON Images(listing_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read_created ON Notifications(user_id, is_read, createdAt DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_listing ON Notifications(listing_id, createdAt DESC);
+
+
+
+
+-- Add any additional tables, indexes, or constraints as needed for future features
+-- 1. Add the AI Score column (Assuming a integer or floating decimal score)
+ALTER TABLE listings ADD COLUMN ai_score INT DEFAULT 0;
+
+-- 2. Add the Timestamp column for when it was last updated
+ALTER TABLE listings ADD COLUMN ai_score_updated_at datetime;
+ALTER table Orders add COLUMN hasReviewed BOOLEAN DEFAULT 0;
+
+
+
+
+-- SQLite-compatible schema for Messages table
+CREATE TABLE IF NOT EXISTS Messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sender_id INTEGER NOT NULL,
+  recipient_id INTEGER NOT NULL,
+  listing_id INTEGER NULL,
+  content TEXT NOT NULL,
+  is_read INTEGER NOT NULL DEFAULT 0 CHECK (is_read IN (0, 1)),
+  read_at DATETIME NULL,
+  createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (sender_id) REFERENCES Users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  FOREIGN KEY (recipient_id) REFERENCES Users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  FOREIGN KEY (listing_id) REFERENCES Listings(id) ON UPDATE CASCADE ON DELETE SET NULL
+);
+
+-- Helpful indexes for chat queries
+CREATE INDEX IF NOT EXISTS idx_messages_sender_recipient_created
+  ON Messages(sender_id, recipient_id, createdAt);
+
+CREATE INDEX IF NOT EXISTS idx_messages_recipient_read
+  ON Messages(recipient_id, is_read);
+
+CREATE INDEX IF NOT EXISTS idx_messages_listing
+  ON Messages(listing_id);

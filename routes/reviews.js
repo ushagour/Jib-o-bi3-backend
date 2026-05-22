@@ -120,11 +120,16 @@ router.post("/", async (req, res) => {
 });
 router.delete("/:id", async (req, res) => {
   const reviewId = req.params.id;
+  const userId = req.user.userId;
 
   try {
     const review = await Reviews.findByPk(reviewId);
     if (!review) {
       return res.status(404).send({ error: "Review not found." });
+    }
+
+    if (String(review.user_id) !== String(userId)) {
+      return res.status(403).send({ error: "Only the review owner can delete this review." });
     }
 
     await review.destroy();

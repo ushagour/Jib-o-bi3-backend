@@ -58,7 +58,6 @@ const getAvatarUrl = (user) => {
 
 // GET: Retrieve a user by ID
 router.get("/:id", auth, async (req, res) => {
-  console.log("Fetching user with ID:", req.params.id); // Debug log
   
 
   const userId = parseInt(req.params.id);

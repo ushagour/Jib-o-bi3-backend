@@ -8,6 +8,7 @@ const Favorites = require('./Favorites');
 const Reviews = require('./Reviews');
 const Orders = require('./Orders');
 const Notification = require('./Notification');
+const Message = require('./Message');
 const AdminActivity = require('./AdminActivity');
 const MobileSetting = require('./MobileSetting');
 const { registerActivityHooks } = require('../utilities/activityLogger');
@@ -35,6 +36,15 @@ Notification.belongsTo(User, { foreignKey: 'actor_id', as: 'actor' });
 
 Listing.hasMany(Notification, { foreignKey: 'listing_id' });
 Notification.belongsTo(Listing, { foreignKey: 'listing_id' });
+
+User.hasMany(Message, { foreignKey: 'sender_id', as: 'sentMessages' });
+Message.belongsTo(User, { foreignKey: 'sender_id', as: 'sender' });
+
+User.hasMany(Message, { foreignKey: 'recipient_id', as: 'receivedMessages' });
+Message.belongsTo(User, { foreignKey: 'recipient_id', as: 'recipient' });
+
+Listing.hasMany(Message, { foreignKey: 'listing_id' });
+Message.belongsTo(Listing, { foreignKey: 'listing_id' });
 
 
 
@@ -69,6 +79,7 @@ module.exports = {
   Favorites,
   Reviews,
   Notification,
+  Message,
   Orders,
   AdminActivity,
   MobileSetting,

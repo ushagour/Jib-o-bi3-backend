@@ -2,6 +2,7 @@ const express = require('express');
 const { Op } = require('sequelize');
 const auth = require('../middleware/auth');
 const { Notification, User, Listing } = require('../models');
+const { sendPushNotification } = require('../utilities/pushNotifications');
 
 const router = express.Router();
 
@@ -31,6 +32,25 @@ router.post('/', async (req, res) => {
       is_read: false,
       read_at: null,
     });
+
+    // Send push notification
+    const user = await User.findByPk(userId);
+    if (user && user.expoPushToken) {
+      try {
+        await sendPushNotification(user.expoPushToken, {
+          title: title,
+          body: content,
+          data: {
+            notificationId: created.id,
+            type: type,
+            listingId: listingId || null,
+          },
+          priority: 'high',
+        });
+      } catch (pushError) {
+        console.warn(`Failed to send push notification:`, pushError.message);
+      }
+    }
 
     res.status(201).json(created);
   } catch (error) {
@@ -137,6 +157,69 @@ router.get('/', async (req, res) => {
   } catch (error) {
     console.error('Error fetching notifications:', error);
     res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+});
+
+// User endpoint: view notifications where authenticated user was the actor (sent messages)
+router.get('/sent', async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const unreadOnly = req.query.unreadOnly === 'true';
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 200);
+
+    const where = { actor_id: userId };
+    if (unreadOnly) where.is_read = false;
+
+    const notifications = await Notification.findAll({
+      where,
+      order: [['createdAt', 'DESC']],
+      limit,
+      include: [
+        { model: User, as: 'user', attributes: ['id', 'name', 'avatar'] },
+        { model: Listing, attributes: ['id', 'title'] },
+      ],
+    });
+
+    const unreadCount = await Notification.count({
+      where: { actor_id: userId, is_read: false },
+    });
+
+    res.json({ unreadCount, notifications });
+  } catch (error) {
+    console.error('Error fetching sent notifications:', error);
+    res.status(500).json({ error: 'Failed to fetch sent notifications' });
+  }
+});
+
+// User endpoint: get conversation (messages) between authenticated user and another user
+router.get('/conversation/:otherUserId', async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const otherUserId = parseInt(req.params.otherUserId, 10);
+
+    if (!otherUserId || Number.isNaN(otherUserId)) {
+      return res.status(400).json({ error: 'Invalid otherUserId' });
+    }
+
+    const messages = await Notification.findAll({
+      where: {
+        type: 'message',
+        [Op.or]: [
+          { user_id: userId, actor_id: otherUserId },
+          { user_id: otherUserId, actor_id: userId },
+        ],
+      },
+      order: [['createdAt', 'ASC']],
+      include: [
+        { model: User, as: 'actor', attributes: ['id', 'name', 'avatar'] },
+        { model: Listing, attributes: ['id', 'title'] },
+      ],
+    });
+
+    res.json({ ok: true, data: messages });
+  } catch (error) {
+    console.error('Error fetching conversation:', error);
+    res.status(500).json({ error: 'Failed to fetch conversation' });
   }
 });
 
