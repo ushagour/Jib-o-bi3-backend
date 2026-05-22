@@ -20,3 +20,4 @@ database/development.sqlite
 .env
 .env.example
 database/*
+Docs/*
