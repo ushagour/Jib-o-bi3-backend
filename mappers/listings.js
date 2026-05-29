@@ -14,6 +14,9 @@ const mapper = listing => {
     thumbnailUrl: `${baseUrl}${image.file_name}_thumb.jpg`
   });
 
+  const images = Array.isArray(listing.Images) ? listing.Images : [];
+  const mappedImages = images.map(mapImage);
+
   return {
     id: listing.id,
     title: listing.title,
@@ -25,9 +28,10 @@ const mapper = listing => {
       icon: listing.Category?.icon,
       name: listing.Category?.name
     },
-    images: listing.Images.map(mapImage), // Map all images
-    imageUrl: listing.Images.length > 0 ? mapImage(listing.Images[0]).url : null,
-    thumbnailUrl: listing.Images.length > 0 ? mapImage(listing.Images[0]).thumbnailUrl : null,  
+    images: mappedImages, // Map all images
+    imageThumbnails: mappedImages.map(image => image.thumbnailUrl),
+    imageUrl: mappedImages.length > 0 ? mappedImages[0].url : null,
+    thumbnailUrl: mappedImages.length > 0 ? mappedImages[0].thumbnailUrl : null,  
     owner: listing.User, 
     latitude: listing.latitude,
     longitude: listing.longitude,
