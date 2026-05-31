@@ -156,6 +156,25 @@ CREATE TABLE IF NOT EXISTS AdminActivities (
   updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Backups Table
+CREATE TABLE IF NOT EXISTS Backups (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  description TEXT,
+  backup_path TEXT,
+  backup_name TEXT,
+  backup_size INTEGER,
+  backup_format TEXT DEFAULT 'sqlite',
+  image_path TEXT,
+  uploaded_by INTEGER,
+  createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (uploaded_by) REFERENCES Users(id) ON DELETE SET NULL
+);
+
+-- Indexes for backups
+CREATE INDEX IF NOT EXISTS idx_backups_uploaded_by ON Backups(uploaded_by);
+
 -- Create Indexes for Better Query Performance
 CREATE INDEX IF NOT EXISTS idx_listings_user_id ON Listings(user_id);
 CREATE INDEX IF NOT EXISTS idx_listings_category_id ON Listings(category_id);
@@ -193,6 +212,7 @@ CREATE TABLE IF NOT EXISTS Messages (
   sender_id INTEGER NOT NULL,
   recipient_id INTEGER NOT NULL,
   listing_id INTEGER NULL,
+  message_type TEXT NOT NULL DEFAULT 'chat' CHECK (message_type IN ('chat', 'notification')),
   content TEXT NOT NULL,
   is_read INTEGER NOT NULL DEFAULT 0 CHECK (is_read IN (0, 1)),
   read_at DATETIME NULL,

@@ -13,6 +13,7 @@ const favorites = require("./routes/favorites");
 const expoPushTokens = require("./routes/expoPushTokens");
 const adminNotifications = require("./routes/adminNotifications");
 const settings = require("./routes/settings");
+const backups = require("./routes/backups");
 const helmet = require("helmet");
 const compression = require("compression");
 const config = require("config");
@@ -47,15 +48,11 @@ app.use("/api/reviews", reviews);
 app.use("/api/stats", stats);
 app.use("/api/admin-notifications", adminNotifications);
 app.use("/api/settings", settings);
+app.use("/api/backups", backups);
 
 
 
 async function migrateLegacyMessages() {
-        const messageCount = await Message.count();
-        if (messageCount > 0) {
-                return;
-        }
-
         const legacyMessages = await Notification.findAll({
                 where: { type: 'message' },
                 order: [['createdAt', 'ASC']],
@@ -65,24 +62,64 @@ async function migrateLegacyMessages() {
                 return;
         }
 
-        const rows = legacyMessages
-            .filter((item) => item.actor_id && item.user_id)
-            .map((item) => ({
-                sender_id: item.actor_id,
-                recipient_id: item.user_id,
-                listing_id: item.listing_id || null,
-                content: item.content,
-                is_read: Boolean(item.is_read),
-                read_at: item.read_at || null,
-                createdAt: item.createdAt,
-                updatedAt: item.updatedAt,
-            }));
+        let migratedCount = 0;
 
-        if (rows.length > 0) {
-            await Message.bulkCreate(rows, { validate: true });
-            console.log(`Migrated ${rows.length} legacy message notifications into the messages table.`);
+        for (const item of legacyMessages) {
+                if (!item.actor_id || !item.user_id) {
+                        continue;
+                }
+
+                const payload = {
+                        sender_id: item.actor_id,
+                        recipient_id: item.user_id,
+                        listing_id: item.listing_id || null,
+                        content: item.content,
+                        is_read: Boolean(item.is_read),
+                        read_at: item.read_at || null,
+                        createdAt: item.createdAt,
+                        updatedAt: item.updatedAt,
+                        message_type: 'notification',
+                };
+
+                const existing = await Message.findOne({
+                        where: {
+                                sender_id: payload.sender_id,
+                                recipient_id: payload.recipient_id,
+                                content: payload.content,
+                                createdAt: payload.createdAt,
+                        },
+                });
+
+                if (existing) {
+                        if (existing.message_type !== 'notification') {
+                                existing.message_type = 'notification';
+                                await existing.save();
+                                migratedCount += 1;
+                        }
+                        continue;
+                }
+
+                await Message.create(payload);
+                migratedCount += 1;
+        }
+
+        if (migratedCount > 0) {
+                console.log(`Migrated ${migratedCount} legacy message notifications into the messages table.`);
         }
     }
+
+async function ensureMessagesMessageTypeColumn() {
+        const queryInterface = sequelize.getQueryInterface();
+        const messageColumns = await queryInterface.describeTable('Messages');
+
+        if (!messageColumns.message_type) {
+                await queryInterface.addColumn('Messages', 'message_type', {
+                        type: require('sequelize').DataTypes.STRING,
+                        allowNull: false,
+                        defaultValue: 'chat',
+                });
+        }
+}
 
 async function ensureUserPasswordResetColumns() {
         const queryInterface = sequelize.getQueryInterface();
@@ -106,6 +143,7 @@ async function ensureUserPasswordResetColumns() {
 // Sync database and start server
 sequelize.sync().then(async () => {
         await ensureUserPasswordResetColumns();
+        await ensureMessagesMessageTypeColumn();
         await migrateLegacyMessages();
         const PORT = process.env.PORT || 3000;
         app.listen(PORT, () => {
