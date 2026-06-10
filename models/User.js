@@ -68,6 +68,14 @@ const User = sequelize.define('User', {
         resetPasswordExpires: {
             type: DataTypes.DATE,
             allowNull: true,
+        },
+        emailVerificationCode: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        emailVerificationExpires: {
+            type: DataTypes.DATE,
+            allowNull: true,
         }
 
      

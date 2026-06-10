@@ -13,7 +13,7 @@ const JWT_SECRET = process.env.JWT_SECRET || config.get("jwtPrivateKey");
 // Avatar URL mapper helper
 const getAvatarUrl = (file_name) => {
   const baseUrl = process.env.ASSETS_BASE_URL || "http://localhost:3000/assets/";
-  return file_name ? `${baseUrl}${file_name}.png` : `${baseUrl}avatars/avatar.png`;
+  return file_name ? `${baseUrl}${file_name}` : null;
 };
 
 // Helper to format user context response
@@ -55,6 +55,17 @@ const ResetPasswordSchema = Joi.object({
   newPassword: Joi.string().required().min(5),
 });
 
+const RequestEmailVerificationSchema = Joi.object({
+  email: Joi.string().email().required(),
+});
+
+const VerifyEmailSchema = Joi.object({
+  email: Joi.string().email().required(),
+  code: Joi.string().required().min(6),
+});
+
+const createVerificationToken = () => crypto.randomBytes(3).toString('hex').toUpperCase();
+
 // Register a new user
 router.post('/register', validateWith(Registerschema), async (req, res) => {
   try {
@@ -73,19 +84,27 @@ router.post('/register', validateWith(Registerschema), async (req, res) => {
       const user = await User.create({
           name,
           email,
-          avatar: 'avatars/avatar.png',
+          avatar: null,
           password: hashedPassword,
+          is_email_verified: false,
       });
+
+      const rawCode = createVerificationToken();
+      const codeHash = crypto.createHash('sha256').update(rawCode).digest('hex');
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+      user.emailVerificationCode = codeHash;
+      user.emailVerificationExpires = expiresAt;
+      await user.save();
       
       const userContext = formatUserContext(user);
-      
-      // Generate a JWT token with full user context
-      const token = jwt.sign(userContext, JWT_SECRET, { expiresIn: '7d' });
 
       res.status(201).json({
         success: true,
-        message: 'User registered successfully',
-        token,
+        message: 'User registered successfully. Verify your email to continue.',
+        requiresEmailVerification: true,
+        verificationCode: rawCode,
+        expiresAt,
         user: userContext,
       });
   } catch (error) {
@@ -102,6 +121,18 @@ router.post("/login", validateWith(Loginschema), async (req, res) => {
     const user = await User.findOne({ where: { email } });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Block login for users that are not active (e.g. suspended/banned)
+    if (String(user.status || "active").toLowerCase() !== "active") {
+      return res.status(403).json({ error: "Your account has been suspended. Please contact support." });
+    }
+
+    if (!user.is_email_verified) {
+      return res.status(403).json({
+        error: 'Email is not verified. Please verify your email before logging in.',
+        code: 'EMAIL_NOT_VERIFIED',
+      });
     }
 
     // Compare passwords
@@ -122,6 +153,86 @@ router.post("/login", validateWith(Loginschema), async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Request an email verification code
+router.post('/request-email-verification', validateWith(RequestEmailVerificationSchema), async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (user.is_email_verified) {
+      return res.status(200).json({
+        success: true,
+        message: 'Email is already verified.',
+      });
+    }
+
+    const rawCode = createVerificationToken();
+    const codeHash = crypto.createHash('sha256').update(rawCode).digest('hex');
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    user.emailVerificationCode = codeHash;
+    user.emailVerificationExpires = expiresAt;
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Verification code generated successfully.',
+      verificationCode: rawCode,
+      expiresAt,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// Verify email with code
+router.post('/verify-email', validateWith(VerifyEmailSchema), async (req, res) => {
+  try {
+    const { email, code } = req.body;
+
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (user.is_email_verified) {
+      return res.status(200).json({
+        success: true,
+        message: 'Email already verified.',
+      });
+    }
+
+    if (!user.emailVerificationCode || !user.emailVerificationExpires) {
+      return res.status(400).json({ error: 'No email verification request found' });
+    }
+
+    if (new Date(user.emailVerificationExpires).getTime() < Date.now()) {
+      return res.status(400).json({ error: 'Verification code has expired' });
+    }
+
+    const codeHash = crypto.createHash('sha256').update(code.trim().toUpperCase()).digest('hex');
+    if (codeHash !== user.emailVerificationCode) {
+      return res.status(400).json({ error: 'Invalid verification code' });
+    }
+
+    user.is_email_verified = true;
+    user.emailVerificationCode = null;
+    user.emailVerificationExpires = null;
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Email verified successfully',
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
   }
 });
 

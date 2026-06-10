@@ -68,6 +68,18 @@ const Listing = sequelize.define('Listing', {
         allowNull: true,
         comment: 'Timestamp of last AI score update',
     },
+closed_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  archived: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+  },
+  archived_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
 });
 
 module.exports = Listing;

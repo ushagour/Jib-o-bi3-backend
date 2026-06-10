@@ -34,6 +34,11 @@ app.use(express.static("public"));
 app.use(helmet());
 app.use(compression());
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 app.use("/api/categories", categories);
 app.use("/api/listings", listings);
 app.use("/api/user", user);
@@ -138,18 +143,71 @@ async function ensureUserPasswordResetColumns() {
                         allowNull: true,
                 });
         }
+
+        if (!userColumns.emailVerificationCode) {
+                await queryInterface.addColumn('Users', 'emailVerificationCode', {
+                        type: require('sequelize').DataTypes.STRING,
+                        allowNull: true,
+                });
+        }
+
+        if (!userColumns.emailVerificationExpires) {
+                await queryInterface.addColumn('Users', 'emailVerificationExpires', {
+                        type: require('sequelize').DataTypes.DATE,
+                        allowNull: true,
+                });
+        }
+}
+
+async function ensureOrderReportColumns() {
+        const queryInterface = sequelize.getQueryInterface();
+        const orderColumns = await queryInterface.describeTable('Orders');
+        const { DataTypes } = require('sequelize');
+
+        if (!orderColumns.hasReported) {
+                await queryInterface.addColumn('Orders', 'hasReported', {
+                        type: DataTypes.BOOLEAN,
+                        allowNull: false,
+                        defaultValue: false,
+                });
+        }
+
+        if (!orderColumns.reportReason) {
+                await queryInterface.addColumn('Orders', 'reportReason', {
+                        type: DataTypes.TEXT,
+                        allowNull: true,
+                });
+        }
+
+        if (!orderColumns.reportedAt) {
+                await queryInterface.addColumn('Orders', 'reportedAt', {
+                        type: DataTypes.DATE,
+                        allowNull: true,
+                });
+        }
+
+        if (!orderColumns.reportedBy) {
+                await queryInterface.addColumn('Orders', 'reportedBy', {
+                        type: DataTypes.INTEGER,
+                        allowNull: true,
+                });
+        }
 }
 
 // Sync database and start server
 sequelize.sync().then(async () => {
         await ensureUserPasswordResetColumns();
         await ensureMessagesMessageTypeColumn();
+        await ensureOrderReportColumns();
         await migrateLegacyMessages();
-        const PORT = process.env.PORT || 3000;
-        app.listen(PORT, () => {
-                console.log(`Server is running on port ${PORT}`);
-        });
+	
+	// Only start the server if not in test mode
+	if (process.env.NODE_ENV !== 'test') {
+		const PORT = process.env.PORT || 3000;
+		app.listen(PORT, () => {
+			console.log(`Server is running on port ${PORT}`);
+		});
+	}
 });
 
-
-
+module.exports = app;
