@@ -372,6 +372,99 @@ router.put('/:id/status', async (req, res) => {
   }
 });
 
+// Report an order issue (buyer can report only once per order)
+router.post('/:id/report', auth, async (req, res) => {
+  try {
+    const reporterId = req.user?.userId || req.user?.id;
+    const reason = String(req.body?.reason || '').trim();
+
+    if (!reason) {
+      return res.status(400).json({ error: 'Report reason is required' });
+    }
+
+    const order = await Orders.findByPk(req.params.id, {
+      include: [
+        {
+          model: Listing,
+          attributes: ['id', 'title', 'user_id'],
+          include: [{ model: User, attributes: ['id', 'name'] }],
+        },
+        {
+          model: User,
+          attributes: ['id', 'name', 'email'],
+        },
+      ],
+    });
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    if (!reporterId || String(order.buyer_id) !== String(reporterId)) {
+      return res.status(403).json({ error: 'Only the buyer can report this order' });
+    }
+
+    if (order.hasReported) {
+      return res.status(409).json({ error: 'Order has already been reported' });
+    }
+
+    await order.update({
+      hasReported: true,
+      reportReason: reason,
+      reportedAt: new Date(),
+      reportedBy: reporterId,
+    });
+
+    if (order.Listing?.user_id && String(order.Listing.user_id) !== String(reporterId)) {
+      try {
+        await notifyUser({
+          userId: order.Listing.user_id,
+          actorId: reporterId,
+          listingId: order.listing_id,
+          type: 'order',
+          title: 'Order Issue Reported',
+          content: `A buyer reported an issue for order #${order.id} on "${order.Listing.title}".`,
+          data: {
+            orderId: order.id,
+            reason,
+          },
+        });
+      } catch (notificationError) {
+        console.error('Error notifying seller of report:', notificationError);
+      }
+    }
+
+    const updatedOrder = await Orders.findByPk(order.id, {
+      include: [
+        {
+          model: Listing,
+          include: [
+            {
+              model: Image,
+              attributes: ['id', 'file_name'],
+            },
+            {
+              model: User,
+            },
+          ],
+        },
+        {
+          model: User,
+          attributes: ['name', 'email'],
+        },
+      ],
+    });
+
+    res.json({
+      success: true,
+      message: 'Order reported successfully',
+      order: mapOrders(updatedOrder),
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Failed to report order' });
+  }
+});
+
 // Delete order
 router.delete('/:id', async (req, res) => {
   try {
@@ -440,6 +533,27 @@ router.post('/:orderId/confirm-checkout', auth, async (req, res) => {
   } catch (err) {
     console.error('🔴 Order completion error:', err);
     res.status(500).json({ error: 'Failed to complete order.' });
+  }
+});
+
+//mobile users close orders
+router.post('/orders/:id/close', async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    
+    // Update order to closed
+    await Order.update(
+      { 
+        is_closed: true, 
+        closed_at: new Date(),
+        closed_by: req.user.id 
+      },
+      { where: { id: orderId } }
+    );
+    
+    res.json({ success: true, message: 'Order closed' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 

@@ -1,4 +1,4 @@
-name: BackEnd CI/CD
+name: BackEnd Simple CI/CD
 
 on:
   pull_request:
@@ -18,7 +18,7 @@ env:
 
 jobs:
   ci:
-    name: CI (Node + Docker Build)
+    name: CI (Lint, Test, Docker Build)
     runs-on: ubuntu-latest
 
     defaults:
@@ -48,8 +48,8 @@ jobs:
       - name: Validate Docker build
         run: docker build -t jibobi3-backend:ci .
 
-  cd:
-    name: CD (Build, Push, Deploy)
+  docker_publish:
+    name: CD (Build and Push Docker Image)
     runs-on: ubuntu-latest
     needs: ci
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -66,7 +66,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract image metadata
         id: meta
@@ -85,15 +85,3 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            cd ${{ secrets.DEPLOY_PATH }}
-            export DOCKER_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            docker compose pull
-            docker compose up -d

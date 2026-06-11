@@ -181,6 +181,7 @@ async function notifyNewMessage(recipientId, messageData) {
     sender_id: messageData.senderId,
     recipient_id: recipientId,
     listing_id: messageData.listingId || null,
+    message_type: 'notification',
     content: messageData.preview || 'You have a new message',
     is_read: false,
     read_at: null,

@@ -25,6 +25,7 @@ router.get('/conversation/:otherUserId', async (req, res) => {
 
     const messages = await Message.findAll({
       where: {
+        message_type: 'chat',
         [Op.or]: [
           { sender_id: userId, recipient_id: otherUserId },
           { sender_id: otherUserId, recipient_id: userId },
@@ -47,6 +48,7 @@ router.get('/threads', async (req, res) => {
 
     const messages = await Message.findAll({
       where: {
+        message_type: 'chat',
         [Op.or]: [{ sender_id: userId }, { recipient_id: userId }],
       },
       order: [['createdAt', 'DESC']],
@@ -123,6 +125,7 @@ router.post('/', async (req, res) => {
       sender_id: senderId,
       recipient_id: recipientId,
       listing_id: listingId || null,
+      message_type: 'chat',
       content,
       is_read: false,
       read_at: null,

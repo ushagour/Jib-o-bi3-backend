@@ -11,6 +11,7 @@ const Notification = require('./Notification');
 const Message = require('./Message');
 const AdminActivity = require('./AdminActivity');
 const MobileSetting = require('./MobileSetting');
+const Backup = require('./Backup');
 const { registerActivityHooks } = require('../utilities/activityLogger');
 
 // Define relationships
@@ -83,4 +84,5 @@ module.exports = {
   Orders,
   AdminActivity,
   MobileSetting,
+  Backup,
 };

@@ -101,10 +101,15 @@ CREATE TABLE IF NOT EXISTS Orders (
   shipping_address TEXT,
   phone TEXT,
   notes TEXT,
+  hasReported BOOLEAN DEFAULT 0,
+  reportReason TEXT,
+  reportedAt DATETIME,
+  reportedBy INTEGER,
   createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
   updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (listing_id) REFERENCES Listings(id) ON DELETE CASCADE,
-  FOREIGN KEY (buyer_id) REFERENCES Users(id) ON DELETE CASCADE
+  FOREIGN KEY (buyer_id) REFERENCES Users(id) ON DELETE CASCADE,
+  FOREIGN KEY (reportedBy) REFERENCES Users(id) ON DELETE SET NULL
 );
 
 -- Notifications Table
@@ -156,6 +161,25 @@ CREATE TABLE IF NOT EXISTS AdminActivities (
   updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Backups Table
+CREATE TABLE IF NOT EXISTS Backups (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  description TEXT,
+  backup_path TEXT,
+  backup_name TEXT,
+  backup_size INTEGER,
+  backup_format TEXT DEFAULT 'sqlite',
+  image_path TEXT,
+  uploaded_by INTEGER,
+  createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (uploaded_by) REFERENCES Users(id) ON DELETE SET NULL
+);
+
+-- Indexes for backups
+CREATE INDEX IF NOT EXISTS idx_backups_uploaded_by ON Backups(uploaded_by);
+
 -- Create Indexes for Better Query Performance
 CREATE INDEX IF NOT EXISTS idx_listings_user_id ON Listings(user_id);
 CREATE INDEX IF NOT EXISTS idx_listings_category_id ON Listings(category_id);
@@ -183,6 +207,10 @@ ALTER TABLE listings ADD COLUMN ai_score INT DEFAULT 0;
 -- 2. Add the Timestamp column for when it was last updated
 ALTER TABLE listings ADD COLUMN ai_score_updated_at datetime;
 ALTER table Orders add COLUMN hasReviewed BOOLEAN DEFAULT 0;
+ALTER table Orders add COLUMN hasReported BOOLEAN DEFAULT 0;
+ALTER table Orders add COLUMN reportReason TEXT;
+ALTER table Orders add COLUMN reportedAt DATETIME;
+ALTER table Orders add COLUMN reportedBy INTEGER;
 
 
 
@@ -193,6 +221,7 @@ CREATE TABLE IF NOT EXISTS Messages (
   sender_id INTEGER NOT NULL,
   recipient_id INTEGER NOT NULL,
   listing_id INTEGER NULL,
+  message_type TEXT NOT NULL DEFAULT 'chat' CHECK (message_type IN ('chat', 'notification')),
   content TEXT NOT NULL,
   is_read INTEGER NOT NULL DEFAULT 0 CHECK (is_read IN (0, 1)),
   read_at DATETIME NULL,
@@ -213,3 +242,8 @@ CREATE INDEX IF NOT EXISTS idx_messages_recipient_read
 
 CREATE INDEX IF NOT EXISTS idx_messages_listing
   ON Messages(listing_id);
+
+
+ALTER TABLE Listings ADD COLUMN closed_at DATETIME;
+ALTER TABLE Listings ADD COLUMN archived BOOLEAN DEFAULT 0;
+ALTER TABLE Listings ADD COLUMN archived_at DATETIME;

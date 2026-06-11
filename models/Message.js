@@ -31,6 +31,11 @@ const Message = sequelize.define('Message', {
       key: 'id',
     },
   },
+  message_type: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    defaultValue: 'chat',
+  },
   content: {
     type: DataTypes.TEXT,
     allowNull: false,

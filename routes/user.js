@@ -11,12 +11,16 @@ const validateWith = require("../middleware/validation");
 const imageResize = require("../middleware/imageResize");
 const Joi = require("joi");
 
+const isAdmin = (req) => String(req?.user?.role || "").toLowerCase() === "admin";
+
 
 // Validation schema for creating/updating a user
 const userSchema = Joi.object({
   name: Joi.string().required(),
   email: Joi.string().email().required(),
   avatar: Joi.string().optional(), // Optional avatar URL
+  phone: Joi.string().allow('').optional(),
+  address: Joi.string().allow('').optional(),
 });
 
 
@@ -46,9 +50,9 @@ const upload = multer({
 const getAvatarUrl = (user) => {
   const baseUrl = process.env.ASSETS_BASE_URL || "http://localhost:3000/assets/";
   
-  // If avatar is null, use user's name as avatar
+  // Keep avatar null until the user uploads one.
   if (!user.avatar) {
-    return user.name;
+    return null;
   }
   
   // Return avatar file URL
@@ -135,6 +139,8 @@ router.put("/:id", [auth,
         name: req.body.name || existingUser.name,
         email: req.body.email || existingUser.email,
         avatar: req.body.avatar || existingUser.avatar,
+        phone: req.body.phone !== undefined ? req.body.phone : existingUser.phone,
+        address: req.body.address !== undefined ? req.body.address : existingUser.address,
       };
 
       // If file uploaded, use the processed filename from imageResize middleware
@@ -155,7 +161,9 @@ router.put("/:id", [auth,
         email: existingUser.email,
         avatar: getAvatarUrl(existingUser),
         is_verified: existingUser.is_verified || false,
+        is_email_verified: existingUser.is_email_verified || false,
         phone: existingUser.phone || "",
+        address: existingUser.address || "",
         role: existingUser.role,
         status: existingUser.status,
       });
@@ -327,6 +335,49 @@ router.patch("/:id/verify", auth, async (req, res) => {
   } catch (error) {
     console.error('Error updating verification status:', error);
     res.status(500).json({ error: 'Failed to update verification status' });
+  }
+});
+
+// PATCH: Suspend/unsuspend user account (admin only)
+router.patch("/:id/suspend", auth, async (req, res) => {
+  try {
+    if (!isAdmin(req)) {
+      return res.status(403).json({ error: "Access denied. Admin only." });
+    }
+
+    const userId = parseInt(req.params.id);
+    const { suspended } = req.body;
+
+    if (typeof suspended !== "boolean") {
+      return res.status(400).json({ error: 'Invalid request. "suspended" must be true or false.' });
+    }
+
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (String(user.role || "").toLowerCase() === "admin" && suspended) {
+      return res.status(400).json({ error: "Admin accounts cannot be suspended." });
+    }
+
+    const nextStatus = suspended ? "inactive" : "active";
+    await user.update({ status: nextStatus });
+
+    res.status(200).json({
+      message: suspended ? "User suspended successfully" : "User reactivated successfully",
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      avatar: getAvatarUrl(user),
+      is_verified: user.is_verified || false,
+      phone: user.phone || "",
+      role: user.role,
+      status: user.status,
+    });
+  } catch (error) {
+    console.error("Error updating user suspension status:", error);
+    res.status(500).json({ error: "Failed to update user suspension status" });
   }
 });
 

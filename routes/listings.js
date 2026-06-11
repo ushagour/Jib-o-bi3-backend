@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Joi = require("joi");
+const { Op } = require("sequelize");
 const multer = require("multer");
 const fs = require("fs/promises");
 const path = require("path");
@@ -24,7 +25,7 @@ const updateListingSchema = Joi.object({
   title: Joi.string().optional(),
   description: Joi.string().allow("").optional(),
   price: Joi.number().min(1).optional(),
-  status: Joi.string().valid('selled', 'still available').optional(),
+  status: Joi.string().valid('sold', 'still available').optional(),
   category_id: Joi.string().optional(),
   carSize: Joi.string().optional().allow(null, ""),
   carColor: Joi.string().optional().allow(null, ""),
@@ -268,7 +269,11 @@ router.get("/nearby", async (req, res) => {
     const dist = parseFloat(distance);
 
     const listings = await Listing.findAll({
-    include: [
+      where: {
+        archived: false,
+        status: "still available",
+      },
+      include: [
         {
           model: Image,
           attributes: ['file_name'], // Include only the file_name attribute
@@ -320,6 +325,10 @@ router.get("/", async(req, res) => {
   try {
     const listings = await Listing.findAll(
       {
+        where: {
+          archived: false,
+          status: "still available",
+        },
         order: [['createdAt', 'DESC']], // Order by created_at field in descending order
 
       include: [
@@ -357,7 +366,11 @@ router.get("/category/:categoryId", async (req, res) => {
 
   try {
     const listings = await Listing.findAll({
-      where: { category_id: categoryId },
+      where: {
+        category_id: categoryId,
+        archived: false,
+        status: "still available",
+      },
       order: [["createdAt", "DESC"]],
       include: [
         {
@@ -441,7 +454,13 @@ router.get("/total_listings", async (req, res) => {
 router.get("/my_listings",auth, async (req, res) => {
   try {
     const myListing = await Listing.findAll({
-      where: { user_id: req.query.userId },
+      where: {
+        user_id: req.query.userId,
+        archived: false,
+        status: {
+          [Op.notIn]: ["sold", "selled", "Sold out", "sold out"],
+        },
+      },
       include: [
         {
           model: Image,
@@ -519,6 +538,10 @@ router.get("/top", async (req, res) => {
   
   try {
     const listings = await Listing.findAll({
+      where: {
+        archived: false,
+        status: "still available",
+      },
       include: [
         {
           model: Image,
@@ -639,6 +662,473 @@ router.get("/admin/ai-scores", auth, async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching AI scores:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+// Close a listing (mark as sold/closed)
+router.put("/:id/close", auth, async (req, res) => {
+  const listingId = parseInt(req.params.id);
+
+  if (Number.isNaN(listingId)) {
+    return res.status(400).json({ error: "Invalid listing id." });
+  }
+
+  try {
+    const listing = await Listing.findByPk(listingId);
+
+    if (!listing) {
+      return res.status(404).json({ error: "Listing not found." });
+    }
+
+    // Check if user owns this listing
+    if (listing.user_id !== req.user.userId) {
+      return res.status(403).json({ error: "You don't have permission to close this listing." });
+    }
+
+    const normalizedStatus = String(listing.status || "").toLowerCase();
+
+    // Check if already closed/archived
+    if (listing.archived || normalizedStatus === "" || normalizedStatus === "sold") {
+      return res.status(400).json({ error: "Listing is already closed." });
+    }
+
+    // Move listing to archive and mark as sold so it disappears from feed.
+    await listing.update({
+      status: "sold",
+      closed_at: new Date(),
+      archived: true,
+      archived_at: new Date(),
+    });
+
+    // Create notification for the seller
+    await Notification.create({
+      user_id: listing.user_id,
+      type: "listing_update",
+      title: "Listing Closed",
+      content: `Your listing "${listing.title}" has been closed.`,
+      listing_id: listing.id,
+    });
+
+    res.status(200).json({
+      message: "Listing closed successfully.",
+      listing: {
+        id: listing.id,
+        title: listing.title,
+        status: listing.status,
+        closed_at: listing.closed_at,
+      },
+    });
+
+
+  } catch (error) {
+    console.error("Error closing listing:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Reopen a closed listing
+router.put("/:id/reopen", auth, async (req, res) => {
+  const listingId = parseInt(req.params.id);
+
+  if (Number.isNaN(listingId)) {
+    return res.status(400).json({ error: "Invalid listing id." });
+  }
+
+  try {
+    const listing = await Listing.findByPk(listingId);
+
+    if (!listing) {
+      return res.status(404).json({ error: "Listing not found." });
+    }
+
+    // Check if user owns this listing
+    if (listing.user_id !== req.user.userId) {
+      return res.status(403).json({ error: "You don't have permission to reopen this listing." });
+    }
+
+    const normalizedStatus = String(listing.status || "").toLowerCase();
+
+    // Check if listing is closed/archived
+    if (!listing.archived && normalizedStatus !== "sold") {
+      return res.status(400).json({ error: "Only closed listings can be reopened." });
+    }
+
+    // Restore listing to active feed.
+    await listing.update({
+      status: "still available",
+      closed_at: null,
+      archived: false,
+      archived_at: null,
+    });
+
+    // Create notification for the seller
+    await Notification.create({
+      user_id: listing.user_id,
+      type: "listing_update",
+      title: "Listing Reopened",
+      content: `Your listing "${listing.title}" has been reopened and is now available for buyers.`,
+      listing_id: listing.id,
+    });
+
+    res.status(200).json({
+      message: "Listing reopened successfully.",
+      listing: {
+        id: listing.id,
+        title: listing.title,
+        status: listing.status,
+      },
+    });
+  } catch (error) {
+    console.error("Error reopening listing:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all closed listings for the authenticated user
+router.get("/closed", auth, async (req, res) => {
+  try {
+    const closedListings = await Listing.findAll({
+      where: {
+        user_id: req.user.userId,
+        archived: true,
+      },
+      order: [["closed_at", "DESC"]],
+      include: [
+        {
+          model: Image,
+          attributes: ["file_name"],
+        },
+        {
+          model: Category,
+          attributes: ["id", "name", "icon"],
+        },
+        {
+          model: User,
+          attributes: ["id", "name", "email"],
+        },
+      ],
+    });
+
+    const resources = closedListings.map(listingMapper);
+    res.status(200).json({
+      data: resources,
+      total: resources.length,
+    });
+  } catch (error) {
+    console.error("Error fetching closed listings:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get closed listings by user ID (for admin)
+router.get("/user/:userId/closed", auth, async (req, res) => {
+  const userId = parseInt(req.params.userId);
+
+  if (Number.isNaN(userId)) {
+    return res.status(400).json({ error: "Invalid user id." });
+  }
+
+  // Check if admin or requesting own listings
+  if (req.user.userId !== userId && req.user.role !== "admin") {
+    return res.status(403).json({ error: "You don't have permission to view these listings." });
+  }
+
+  try {
+    const closedListings = await Listing.findAll({
+      where: {
+        user_id: userId,
+        archived: true,
+      },
+      order: [["closed_at", "DESC"]],
+      include: [
+        {
+          model: Image,
+          attributes: ["file_name"],
+        },
+        {
+          model: Category,
+          attributes: ["id", "name", "icon"],
+        },
+      ],
+    });
+
+    const resources = closedListings.map(listingMapper);
+    res.status(200).json({
+      data: resources,
+      total: resources.length,
+    });
+  } catch (error) {
+    console.error("Error fetching closed listings:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get listing statistics including closed counts
+router.get("/stats", auth, async (req, res) => {
+  try {
+    const totalListings = await Listing.count({ where: { user_id: req.user.userId } });
+    const activeListings = await Listing.count({
+      where: {
+        user_id: req.user.userId,
+        status: "still available",
+      },
+    });
+    const closedListings = await Listing.count({
+      where: {
+        user_id: req.user.userId,
+        archived: true,
+      },
+    });
+    const soldListings = await Listing.count({
+      where: {
+        user_id: req.user.userId,
+        status: "sold",
+      },
+    });
+
+    res.status(200).json({
+      total: totalListings,
+      active: activeListings,
+      closed: closedListings,
+      sold: soldListings,
+    });
+  } catch (error) {
+    console.error("Error fetching listing stats:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Bulk close listings (for admin)
+router.post("/bulk-close", auth, async (req, res) => {
+  const { listingIds } = req.body;
+
+  if (!Array.isArray(listingIds) || listingIds.length === 0) {
+    return res.status(400).json({ error: "Invalid listing ids array." });
+  }
+
+  // Check if admin
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ error: "Admin access required." });
+  }
+
+  try {
+    const results = await Promise.all(
+      listingIds.map(async (id) => {
+        const listing = await Listing.findByPk(id);
+        if (listing && !listing.archived) {
+          await listing.update({
+            status: "sold",
+            closed_at: new Date(),
+            archived: true,
+            archived_at: new Date(),
+          });
+          return { id, success: true };
+        }
+        return { id, success: false, error: "Listing not found or already archived" };
+      })
+    );
+
+    res.status(200).json({
+      message: "Bulk close operation completed.",
+      results,
+    });
+  } catch (error) {
+    console.error("Error in bulk close:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Archive a listing (soft delete without removing from database)
+router.put("/:id/archive", auth, async (req, res) => {
+  const listingId = parseInt(req.params.id);
+
+  if (Number.isNaN(listingId)) {
+    return res.status(400).json({ error: "Invalid listing id." });
+  }
+
+  try {
+    const listing = await Listing.findByPk(listingId);
+
+    if (!listing) {
+      return res.status(404).json({ error: "Listing not found." });
+    }
+
+    if (listing.user_id !== req.user.userId && req.user.role !== "admin") {
+      return res.status(403).json({ error: "Permission denied." });
+    }
+
+    await listing.update({
+      archived: true,
+      archived_at: new Date(),
+    });
+
+    res.status(200).json({
+      message: "Listing archived successfully.",
+      listing: { id: listing.id, title: listing.title, archived: true },
+    });
+  } catch (error) {
+    console.error("Error archiving listing:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Restore an archived listing
+router.put("/:id/restore", auth, async (req, res) => {
+  const listingId = parseInt(req.params.id);
+
+  if (Number.isNaN(listingId)) {
+    return res.status(400).json({ error: "Invalid listing id." });
+  }
+
+  try {
+    const listing = await Listing.findByPk(listingId);
+
+    if (!listing) {
+      return res.status(404).json({ error: "Listing not found." });
+    }
+
+    if (listing.user_id !== req.user.userId && req.user.role !== "admin") {
+      return res.status(403).json({ error: "Permission denied." });
+    }
+
+    await listing.update({
+      archived: false,
+      archived_at: null,
+    });
+
+    res.status(200).json({
+      message: "Listing restored successfully.",
+      listing: { id: listing.id, title: listing.title, archived: false },
+    });
+  } catch (error) {
+    console.error("Error restoring listing:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get archived listings
+router.get("/archived", auth, async (req, res) => {
+  try {
+    const archivedListings = await Listing.findAll({
+      where: {
+        user_id: req.user.userId,
+        archived: true,
+        status: {
+          [Op.notIn]: ["sold", "Sold out", "sold out"],
+        },
+      },
+      order: [["archived_at", "DESC"]],
+      include: [
+        {
+          model: Image,
+          attributes: ["file_name"],
+        },
+        {
+          model: Category,
+          attributes: ["id", "name", "icon"],
+        },
+      ],
+    });
+
+    const resources = archivedListings.map(listingMapper);
+    res.status(200).json({
+      data: resources,
+      total: resources.length,
+    });
+  } catch (error) {
+    console.error("Error fetching archived listings:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get sold listings (separate from archived listings)
+router.get("/sold", auth, async (req, res) => {
+  try {
+    const soldListings = await Listing.findAll({
+      where: {
+        user_id: req.user.userId,
+        status: {
+          [Op.in]: ["sold", "Sold out", "sold out"],
+        },
+      },
+      order: [["closed_at", "DESC"], ["updatedAt", "DESC"]],
+      include: [
+        {
+          model: Image,
+          attributes: ["file_name"],
+        },
+        {
+          model: Category,
+          attributes: ["id", "name", "icon"],
+        },
+      ],
+    });
+
+    const resources = soldListings.map(listingMapper);
+    res.status(200).json({
+      data: resources,
+      total: resources.length,
+    });
+  } catch (error) {
+    console.error("Error fetching sold listings:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+// Get similar listings by category
+router.get("/:id/similar", async (req, res) => {
+  try {
+    const listingId = parseInt(req.params.id);
+    const categoryId = req.query.category ? parseInt(req.query.category) : null;
+    const limit = req.query.limit ? parseInt(req.query.limit) : 10;
+
+    if (Number.isNaN(listingId)) {
+      return res.status(400).json({ error: "Invalid listing id." });
+    }
+
+    // Get the original listing to find its category if not provided
+    const originalListing = await Listing.findByPk(listingId);
+    if (!originalListing) {
+      return res.status(404).json({ error: "Listing not found." });
+    }
+
+    const filterCategoryId = categoryId || originalListing.category_id;
+
+    const similarListings = await Listing.findAll({
+      where: {
+        id: { [Op.ne]: listingId },
+        category_id: filterCategoryId,
+        archived: false,
+        status: "still available",
+      },
+      order: [["createdAt", "DESC"]],
+      limit,
+      include: [
+        {
+          model: Image,
+          attributes: ["file_name"],
+        },
+        {
+          model: Category,
+          attributes: ["id", "name", "icon"],
+        },
+        {
+          model: User,
+          attributes: { exclude: ["password"] },
+        },
+      ],
+    });
+
+    const resources = similarListings.map(listingMapper);
+
+    
+    res.status(200).json({
+      data: resources,
+      total: resources.length,
+    });
+  } catch (error) {
+    console.error("Error fetching similar listings:", error);
     res.status(500).json({ error: error.message });
   }
 });

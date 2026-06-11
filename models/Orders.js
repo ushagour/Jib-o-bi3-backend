@@ -86,6 +86,27 @@ const Orders = sequelize.define('Orders', {
         type: DataTypes.BOOLEAN,
         allowNull: false,
         defaultValue: false,
+    },
+    hasReported: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+    },
+    reportReason: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+    },
+    reportedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+    },
+    reportedBy: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+            model: 'Users',
+            key: 'id',
+        },
     }
 });
 
