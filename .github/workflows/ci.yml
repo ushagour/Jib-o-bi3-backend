@@ -1,12 +1,13 @@
 name: BackEnd Simple CI/CD
 
 on:
+  workflow_dispatch:
   pull_request:
     branches:
       - main
   push:
     branches:
-      - main
+      - '**'
 
 permissions:
   contents: read
@@ -21,10 +22,6 @@ jobs:
     name: CI (Lint, Test, Docker Build)
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: BackEnd
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -34,7 +31,7 @@ jobs:
         with:
           node-version: 18
           cache: npm
-          cache-dependency-path: BackEnd/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -80,8 +77,8 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
-          context: ./BackEnd
-          file: ./BackEnd/Dockerfile
+          context: .
+          file: ./Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
