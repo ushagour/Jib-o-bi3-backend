@@ -35,7 +35,7 @@ app.use(compression());
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.status(200).json({ status: 'ok', message: 'Server is healthy' });
+  res.status(200).json({ status: 'ok', message: 'Server is healthy !' });
 });
 
 app.use("/api/categories", categories);
