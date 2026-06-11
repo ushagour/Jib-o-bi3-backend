@@ -101,10 +101,15 @@ CREATE TABLE IF NOT EXISTS Orders (
   shipping_address TEXT,
   phone TEXT,
   notes TEXT,
+  hasReported BOOLEAN DEFAULT 0,
+  reportReason TEXT,
+  reportedAt DATETIME,
+  reportedBy INTEGER,
   createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
   updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (listing_id) REFERENCES Listings(id) ON DELETE CASCADE,
-  FOREIGN KEY (buyer_id) REFERENCES Users(id) ON DELETE CASCADE
+  FOREIGN KEY (buyer_id) REFERENCES Users(id) ON DELETE CASCADE,
+  FOREIGN KEY (reportedBy) REFERENCES Users(id) ON DELETE SET NULL
 );
 
 -- Notifications Table
@@ -202,6 +207,10 @@ ALTER TABLE listings ADD COLUMN ai_score INT DEFAULT 0;
 -- 2. Add the Timestamp column for when it was last updated
 ALTER TABLE listings ADD COLUMN ai_score_updated_at datetime;
 ALTER table Orders add COLUMN hasReviewed BOOLEAN DEFAULT 0;
+ALTER table Orders add COLUMN hasReported BOOLEAN DEFAULT 0;
+ALTER table Orders add COLUMN reportReason TEXT;
+ALTER table Orders add COLUMN reportedAt DATETIME;
+ALTER table Orders add COLUMN reportedBy INTEGER;
 
 
 
@@ -233,3 +242,8 @@ CREATE INDEX IF NOT EXISTS idx_messages_recipient_read
 
 CREATE INDEX IF NOT EXISTS idx_messages_listing
   ON Messages(listing_id);
+
+
+ALTER TABLE Listings ADD COLUMN closed_at DATETIME;
+ALTER TABLE Listings ADD COLUMN archived BOOLEAN DEFAULT 0;
+ALTER TABLE Listings ADD COLUMN archived_at DATETIME;
