@@ -1,6 +1,5 @@
-const config = require("config");
 const jwt = require("jsonwebtoken");
-const JWT_SECRET = process.env.JWT_SECRET || config.get("jwtPrivateKey");
+const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
   throw new Error("FATAL ERROR: JWT_SECRET is not defined.");
 }

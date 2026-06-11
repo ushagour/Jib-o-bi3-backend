@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const express = require("express");
 const categories = require("./routes/categories");
 const listings = require("./routes/listings");
@@ -16,11 +18,8 @@ const settings = require("./routes/settings");
 const backups = require("./routes/backups");
 const helmet = require("helmet");
 const compression = require("compression");
-const config = require("config");
 const app = express();
 const { sequelize, Notification, Message } = require('./models');
-
-require('dotenv').config();
 
 const cors = require('cors');
 // Enable CORS for all origins
@@ -35,7 +34,7 @@ app.use(helmet());
 app.use(compression());
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 

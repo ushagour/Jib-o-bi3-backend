@@ -1,5 +1,5 @@
-const config = require("config");
+const REQUEST_DELAY_MS = Number.parseInt(process.env.REQUEST_DELAY_MS || "1000", 10);
 
 module.exports = async (req, res, next) => {
-  setTimeout(() => next(), config.get("delay"));
+  setTimeout(() => next(), Number.isFinite(REQUEST_DELAY_MS) ? REQUEST_DELAY_MS : 1000);
 };

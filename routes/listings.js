@@ -12,7 +12,6 @@ const imageResize = require("../middleware/imageResize");
 const delay = require("../middleware/delay");
 const listingMapper = require("../mappers/listings");
 const { sequelize, Listing, Image, User, Favorites, Reviews, Category, Orders, Notification } = require("../models");
-const config = require("config");
 const { createListingUpdateNotifications } = require("../utilities/notifications");
 
 const upload = multer({

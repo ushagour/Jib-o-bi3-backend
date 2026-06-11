@@ -5,10 +5,13 @@ const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const validateWith = require("../middleware/validation");
-const config = require("config");
 const { User } = require('../models');
 const auth = require("../middleware/auth");
-const JWT_SECRET = process.env.JWT_SECRET || config.get("jwtPrivateKey");
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  throw new Error("FATAL ERROR: JWT_SECRET is not defined.");
+}
 
 // Avatar URL mapper helper
 const getAvatarUrl = (file_name) => {
