@@ -21,3 +21,6 @@ database/development.sqlite
 .env.example
 database/*
 Docs/*
+/database/development.sqlite
+database/development.sqlite
+database/development.sqlite

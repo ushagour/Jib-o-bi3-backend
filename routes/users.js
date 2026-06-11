@@ -1,7 +1,6 @@
 const express = require("express");
 const router = express.Router();
 const auth = require("../middleware/auth");
-const config = require("config");
 const { User, Orders } = require("../models");
 
 // Apply auth middleware to all routes
