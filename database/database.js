@@ -11,7 +11,7 @@ const storagePath = process.env.DATABASE_PATH || defaultStoragePath;
 const sequelize = new Sequelize({
     dialect: 'sqlite',
     storage: storagePath,
-    logging: false
+    logging: false, // Disable logging for cleaner test output
 });
 
 module.exports = sequelize;
