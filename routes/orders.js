@@ -50,6 +50,41 @@ router.get('/', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch orders' });
   }
 });
+// Get user-specific orders
+router.get('/my', auth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const orders = await Orders.findAll({
+      where: { buyer_id: userId },
+      include: [
+        {
+          model: Listing,
+          include: [
+            {
+              model: Image,
+              attributes: ['id', 'file_name'],
+            },
+            {
+              model: User,
+            },
+          ],
+        },
+        {
+          model: User,
+          attributes: ['name', 'email'],
+        },
+      ],
+    });
+    res.json(mapOrders(orders));
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch orders' });
+  }
+});
+
+
+
+
+
 
 // Get recent orders
 router.get('/recent', async (req, res) => {
