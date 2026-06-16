@@ -354,6 +354,38 @@ router.get("/", async(req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+router.get("/newest", async(req, res) => {
+  try {
+    const listings = await Listing.findAll(
+      {
+        where: {
+          archived: false,
+          status: "still available",
+        },
+        order: [['createdAt', 'DESC']], // Order by created_at field in descending order
+      include: [
+        {
+          model: Image,
+          attributes: ['file_name'], // Include only the file_name attribute
+        },
+        {
+          model: User,
+          attributes: ['name'], // Include only the name attribute
+          attributes: { exclude: ["password"] }, // Exclude the password field
+
+        }, {
+          model: Category,
+          attributes: ['name', 'icon'], // Include only the name attribute
+        }
+
+      ],
+    });
+    const resources = listings.map(listingMapper);
+    res.status(200).json(resources);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Get listings by category
 router.get("/category/:categoryId", async (req, res) => {
@@ -437,7 +469,6 @@ router.get("/detail/:id", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
 
 router.get("/total_listings", async (req, res) => {
   try {
