@@ -21,6 +21,10 @@ const compression = require("compression");
 const app = express();
 const { sequelize, Notification, Message } = require('./models');
 
+const swaggerUi = require("swagger-ui-express");
+const swaggerSpec = require("./config/swagger");
+
+
 const cors = require('cors');
 // Enable CORS for all origins
 app.use(cors());
@@ -33,10 +37,7 @@ app.use(express.static("public"));
 app.use(helmet());
 app.use(compression());
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.status(200).json({ status: 'ok', message: 'Server is healthy !' });
-});
+
 
 app.use("/api/categories", categories);
 app.use("/api/listings", listings);
@@ -54,6 +55,30 @@ app.use("/api/admin-notifications", adminNotifications);
 app.use("/api/settings", settings);
 app.use("/api/backups", backups);
 
+
+
+app.use(
+  "/api-docs",
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerSpec)
+);
+
+
+
+/**
+ * @swagger
+ * /api/health:
+ *   get:
+ *     summary: Test Swagger
+ *     tags:
+ *       - Test
+ *     responses:
+ *       200:
+ *         description: Swagger fonctionne
+ */
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok', message: 'Server is healthy !' });
+});
 
 
 async function migrateLegacyMessages() {
