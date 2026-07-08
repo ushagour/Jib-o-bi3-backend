@@ -68,6 +68,31 @@ const Listing = sequelize.define('Listing', {
         allowNull: true,
         comment: 'Timestamp of last AI score update',
     },
+    fraudScore: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        defaultValue: 0,
+        validate: {
+            min: 0,
+            max: 100,
+        },
+        comment: 'Fraud/risk detection score (0-100)',
+    },
+    flagged: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        comment: 'Flagged for content violations or fraud',
+    },
+    flagReason: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        comment: 'Reason for flagging (JSON with violations)',
+    },
+    moderationStatus: {
+        type: DataTypes.ENUM('approved', 'flagged', 'blocked'),
+        defaultValue: 'approved',
+        comment: 'Content moderation status',
+    },
 closed_at: {
     type: DataTypes.DATE,
     allowNull: true,
