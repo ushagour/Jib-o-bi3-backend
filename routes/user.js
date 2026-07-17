@@ -61,8 +61,6 @@ const getAvatarUrl = (user) => {
 
 // GET: Retrieve a user by ID
 router.get("/:id", auth, async (req, res) => {
-  
-
   const userId = parseInt(req.params.id);
 
   try {
@@ -70,39 +68,47 @@ router.get("/:id", auth, async (req, res) => {
       include: [
         {
           model: Listing,
-          attributes: ['id'], // Include only the file_name attribute
-        },{
+          attributes: ['id'],
+        },
+        {
           model: Orders,
-          attributes: ['id', 'status'], // Include order ID and status
+          attributes: ['id', 'status'],
         }
       ],
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
     }
 
-  );
+    const memberSinceYear = user.createdAt ? new Date(user.createdAt).getFullYear() : new Date().getFullYear();
 
-    if (!user) return res.status(404).send({ error: "User not found" });
-
-    res.send({
+    return res.json({
       id: user.id,
-      name: user.name,
+      name: user.name || "",
       email: user.email,
       avatar: getAvatarUrl(user),
-      is_phone_verified: !!user.phone,
-      is_email_verified: user.is_email_verified || false,
-      is_quick_responder: user.is_quick_responder || false, // Assuming quick verification is the same as email verification for now
       phone: user.phone || "",
-      role: user.role,
-      status: user.status,
-      completedOrders: user.Orders.filter(order => order.status === 'completed').length,
-      pendingOrders: user.Orders.filter(order => order.status === 'pending').length,
-      reviewsCount: user.reviews ? user.reviews.length : 0,
-      listingsCount: user.Listings ? user.Listings.length : 0,
+      address: user.address || "",
+      is_phone_verified: user.is_phone_verified || !!user.phone,
+      is_email_verified: user.is_email_verified || false,
+      is_quick_responder: user.is_quick_responder || false,
       is_verified: user.is_verified || false,
+      role: user.role || "Customer",
+      status: user.status || "active",
+      // Stats for profile
+      listings_count: user.Listings ? user.Listings.length : 0,
+      sales_count: user.Orders ? user.Orders.filter(order => order.status === 'completed').length : 0,
+      member_since: memberSinceYear,
+      // Additional data for compatibility
+      completedOrders: user.Orders ? user.Orders.filter(order => order.status === 'completed').length : 0,
+      pendingOrders: user.Orders ? user.Orders.filter(order => order.status === 'pending').length : 0,
+      createdAt: user.createdAt,
     });
 
   } catch (error) {
     console.error("Error retrieving user:", error);
-    res.status(500).send({ error: "An error occurred while retrieving the user" });
+    return res.status(500).json({ error: "An error occurred while retrieving the user", details: error.message });
   }
 });
 
@@ -116,62 +122,81 @@ router.put("/:id", [auth,
   const userId = parseInt(req.params.id);
 
   try {
-      const existingUser = await User.findByPk(userId);
+    const existingUser = await User.findByPk(userId);
 
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
 
-      if (!existingUser) {
-        return res.status(404).send({ error: "user not found." });
-      }
-
-
-          // //validate the old password is much the password in the database
+    // Validate old password if provided
     if (req.body.password !== undefined && req.body.password !== '') {
       const isMatch = await existingUser.comparePassword(req.body.password);
-      if (!isMatch) return res.status(400).send({ error: "Old password is incorrect" });
-    }
-   
-
-
-    
-      // Update user fields
-      const updatedUserData = {
-        name: req.body.name || existingUser.name,
-        email: req.body.email || existingUser.email,
-        avatar: req.body.avatar || existingUser.avatar,
-        phone: req.body.phone !== undefined ? req.body.phone : existingUser.phone,
-        address: req.body.address !== undefined ? req.body.address : existingUser.address,
-      };
-
-      // If file uploaded, use the processed filename from imageResize middleware
-      if (req.images && req.images.length > 0) {
-        updatedUserData.avatar = req.images[0] + "_full.jpg";
+      if (!isMatch) {
+        return res.status(400).json({ error: "Old password is incorrect" });
       }
-      
-
-
-      // Update the user in the database
-      await existingUser.update(updatedUserData);
-      await existingUser.save(); // Save the changes to the database
-
-      // Send the updated user data in the response
-      res.status(200).json({
-        id: existingUser.id,
-        name: existingUser.name,
-        email: existingUser.email,
-        avatar: getAvatarUrl(existingUser),
-        is_verified: existingUser.is_verified || false,
-        is_email_verified: existingUser.is_email_verified || false,
-        phone: existingUser.phone || "",
-        address: existingUser.address || "",
-        role: existingUser.role,
-        status: existingUser.status,
-      });
-    } catch (error) {
-      console.error("Error updating user data :", error);
-      res.status(500).json({ error: error.message });
     }
+
+    // Update user fields
+    const updatedUserData = {
+      name: req.body.name || existingUser.name,
+      email: req.body.email || existingUser.email,
+      avatar: req.body.avatar || existingUser.avatar,
+      phone: req.body.phone !== undefined ? req.body.phone : existingUser.phone,
+      address: req.body.address !== undefined ? req.body.address : existingUser.address,
+    };
+
+    // If file uploaded, use the processed filename from imageResize middleware
+    if (req.images && req.images.length > 0) {
+      updatedUserData.avatar = req.images[0] + "_full.jpg";
+    }
+
+    // Update the user in the database
+    await existingUser.update(updatedUserData);
+    await existingUser.save();
+
+    // Reload user with associations to get stats
+    const updatedUser = await User.findByPk(existingUser.id, {
+      include: [
+        {
+          model: Listing,
+          attributes: ['id'],
+        },
+        {
+          model: Orders,
+          attributes: ['id', 'status'],
+        }
+      ],
+    });
+
+    const memberSinceYear = updatedUser.createdAt ? new Date(updatedUser.createdAt).getFullYear() : new Date().getFullYear();
+
+    // Send the updated user data in the response with stats
+    return res.status(200).json({
+      id: updatedUser.id,
+      name: updatedUser.name || "",
+      email: updatedUser.email,
+      avatar: getAvatarUrl(updatedUser),
+      phone: updatedUser.phone || "",
+      address: updatedUser.address || "",
+      is_phone_verified: updatedUser.is_phone_verified || !!updatedUser.phone,
+      is_email_verified: updatedUser.is_email_verified || false,
+      is_quick_responder: updatedUser.is_quick_responder || false,
+      is_verified: updatedUser.is_verified || false,
+      role: updatedUser.role || "Customer",
+      status: updatedUser.status || "active",
+      listings_count: updatedUser.Listings ? updatedUser.Listings.length : 0,
+      sales_count: updatedUser.Orders ? updatedUser.Orders.filter(order => order.status === 'completed').length : 0,
+      member_since: memberSinceYear,
+      completedOrders: updatedUser.Orders ? updatedUser.Orders.filter(order => order.status === 'completed').length : 0,
+      pendingOrders: updatedUser.Orders ? updatedUser.Orders.filter(order => order.status === 'pending').length : 0,
+      createdAt: updatedUser.createdAt,
+    });
+  } catch (error) {
+    console.error("Error updating user data:", error);
+    return res.status(500).json({ error: "Failed to update user profile", details: error.message });
   }
-);
+});
+// DELETE: Delete a user by ID (requires email verification and reason)
 // DELETE: Delete a user by ID (requires email verification and reason)
 router.delete("/:id", auth, async (req, res) => {
   const userId = parseInt(req.params.id);
@@ -180,31 +205,33 @@ router.delete("/:id", auth, async (req, res) => {
   try {
     const user = await User.findByPk(userId);
 
-    if (!user) return res.status(404).send({ error: "User not found" });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
 
     // Verify email matches the user's email
     if (!email || email !== user.email) {
-      return res.status(403).send({ 
+      return res.status(403).json({ 
         error: "Email verification failed. Please provide the correct email associated with your account." 
       });
     }
 
     // Validate reason is provided
     if (!reason || typeof reason !== 'string' || reason.trim().length < 10) {
-      return res.status(400).send({ 
+      return res.status(400).json({ 
         error: "Please provide a reason for account deletion (minimum 10 characters)." 
       });
     }
 
-    // Log the deletion reason for admin review (optional - could be saved to a deletion_log table)
+    // Log the deletion reason for admin review
     console.log(`Account deletion requested by user ${userId} (${user.email}). Reason: ${reason}`);
 
     await user.destroy();
 
-    res.send({ message: "Your account has been deleted successfully." });
+    return res.json({ message: "Your account has been deleted successfully." });
   } catch (error) {
     console.error("Error deleting user:", error);
-    res.status(500).send({ error: "An error occurred while deleting the user" });
+    return res.status(500).json({ error: "An error occurred while deleting the user", details: error.message });
   }
 });
 
@@ -230,20 +257,24 @@ router.patch("/:id/role", auth, async (req, res) => {
 
     await user.update({ role });
 
-    res.json({
+    return res.status(200).json({
       message: `User role updated to ${role}`,
       id: user.id,
-      name: user.name,
+      name: user.name || "",
       email: user.email,
       avatar: getAvatarUrl(user),
-      is_verified: user.is_verified || false,
       phone: user.phone || "",
-      role: user.role,
-      status: user.status,
+      address: user.address || "",
+      is_phone_verified: user.is_phone_verified || !!user.phone,
+      is_email_verified: user.is_email_verified || false,
+      is_quick_responder: user.is_quick_responder || false,
+      is_verified: user.is_verified || false,
+      role: user.role || "Customer",
+      status: user.status || "active",
     });
   } catch (error) {
     console.error('Error updating user role:', error);
-    res.status(500).json({ error: 'Failed to update user role' });
+    return res.status(500).json({ error: 'Failed to update user role', details: error.message });
   }
 });
 
@@ -255,12 +286,12 @@ router.delete("/:id/avatar", auth, async (req, res) => {
     const existingUser = await User.findByPk(userId);
 
     if (!existingUser) {
-      return res.status(404).send({ error: "User not found." });
+      return res.status(404).json({ error: "User not found" });
     }
 
-    // Check if user has permission to delete this avatar (optional security check)
+    // Check if user has permission to delete this avatar
     if (req.user.userId !== userId) {
-      return res.status(403).send({ error: "You can only delete your own avatar." });
+      return res.status(403).json({ error: "You can only delete your own avatar" });
     }
 
     // Remove avatar file from filesystem if it exists
@@ -277,21 +308,25 @@ router.delete("/:id/avatar", auth, async (req, res) => {
     // Update user record to remove avatar
     await existingUser.update({ avatar: null });
 
-    res.status(200).json({
+    return res.status(200).json({
       message: "Avatar deleted successfully",
       id: existingUser.id,
-      name: existingUser.name,
+      name: existingUser.name || "",
       email: existingUser.email,
-      avatar: getAvatarUrl(existingUser), // Will return user's name when avatar is null
-      is_verified: existingUser.is_verified || false,
+      avatar: null,
       phone: existingUser.phone || "",
-      role: existingUser.role,
-      status: existingUser.status,
+      address: existingUser.address || "",
+      is_phone_verified: existingUser.is_phone_verified || !!existingUser.phone,
+      is_email_verified: existingUser.is_email_verified || false,
+      is_quick_responder: existingUser.is_quick_responder || false,
+      is_verified: existingUser.is_verified || false,
+      role: existingUser.role || "Customer",
+      status: existingUser.status || "active",
     });
 
   } catch (error) {
     console.error("Error deleting avatar:", error);
-    res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: "Failed to delete avatar", details: error.message });
   }
 });
 
@@ -320,20 +355,24 @@ router.patch("/:id/verify", auth, async (req, res) => {
 
     console.log(`User ${userId} (${user.email}) verification status updated to: ${verified}`);
 
-    res.status(200).json({
+    return res.status(200).json({
       message: `Account ${verified ? 'verified' : 'unverified'} successfully`,
       id: user.id,
-      name: user.name,
+      name: user.name || "",
       email: user.email,
       avatar: getAvatarUrl(user),
-      is_verified: user.is_verified,
       phone: user.phone || "",
-      role: user.role,
-      status: user.status,
+      address: user.address || "",
+      is_phone_verified: user.is_phone_verified || !!user.phone,
+      is_email_verified: user.is_email_verified || false,
+      is_quick_responder: user.is_quick_responder || false,
+      is_verified: user.is_verified || false,
+      role: user.role || "Customer",
+      status: user.status || "active",
     });
   } catch (error) {
     console.error('Error updating verification status:', error);
-    res.status(500).json({ error: 'Failed to update verification status' });
+    return res.status(500).json({ error: 'Failed to update verification status', details: error.message });
   }
 });
 
@@ -363,20 +402,24 @@ router.patch("/:id/suspend", auth, async (req, res) => {
     const nextStatus = suspended ? "inactive" : "active";
     await user.update({ status: nextStatus });
 
-    res.status(200).json({
+    return res.status(200).json({
       message: suspended ? "User suspended successfully" : "User reactivated successfully",
       id: user.id,
-      name: user.name,
+      name: user.name || "",
       email: user.email,
       avatar: getAvatarUrl(user),
-      is_verified: user.is_verified || false,
       phone: user.phone || "",
-      role: user.role,
-      status: user.status,
+      address: user.address || "",
+      is_phone_verified: user.is_phone_verified || !!user.phone,
+      is_email_verified: user.is_email_verified || false,
+      is_quick_responder: user.is_quick_responder || false,
+      is_verified: user.is_verified || false,
+      role: user.role || "Customer",
+      status: user.status || "active",
     });
   } catch (error) {
     console.error("Error updating user suspension status:", error);
-    res.status(500).json({ error: "Failed to update user suspension status" });
+    return res.status(500).json({ error: "Failed to update user suspension status", details: error.message });
   }
 });
 
