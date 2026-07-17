@@ -7,6 +7,7 @@ const bcrypt = require("bcrypt");
 const validateWith = require("../middleware/validation");
 const { User } = require('../models');
 const auth = require("../middleware/auth");
+const Logger = require('../utilities/logger');
 const JWT_SECRET = process.env.JWT_SECRET;
 
 if (!JWT_SECRET) {
@@ -66,6 +67,11 @@ const VerifyEmailSchema = Joi.object({
   email: Joi.string().email().required(),
   code: Joi.string().required().min(6),
 });
+
+
+
+
+
 
 const createVerificationToken = () => crypto.randomBytes(3).toString('hex').toUpperCase();
 
@@ -148,6 +154,13 @@ router.post("/login", validateWith(Loginschema), async (req, res) => {
 
     // Generate a JWT token with complete user context
     const token = jwt.sign(userContext, JWT_SECRET, { expiresIn: '7d' });
+    // User login
+await Logger.authActivity(`User ${user.email} logged in`, {
+  user_id: user.id,
+  ip_address: req.ip,
+  user_agent: req.get('user-agent'),
+});
+
 
     res.status(200).json({
       success: true,

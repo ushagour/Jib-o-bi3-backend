@@ -14,12 +14,21 @@ const messages = require("./routes/messages");
 const favorites = require("./routes/favorites");
 const expoPushTokens = require("./routes/expoPushTokens");
 const adminNotifications = require("./routes/adminNotifications");
+const logs = require("./routes/logs");
 const settings = require("./routes/settings");
 const backups = require("./routes/backups");
+const assistant = require("./routes/assistant");
+const moderation = require("./routes/moderation");
 const helmet = require("helmet");
 const compression = require("compression");
 const app = express();
 const { sequelize, Notification, Message } = require('./models');
+
+const swaggerUi = require("swagger-ui-express");
+const swaggerSpec = require("./config/swagger");
+const { logRequest, logError } = require('./middleware/logger');
+
+
 
 const cors = require('cors');
 // Enable CORS for all origins
@@ -33,10 +42,7 @@ app.use(express.static("public"));
 app.use(helmet());
 app.use(compression());
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.status(200).json({ status: 'ok', message: 'Server is healthy !' });
-});
+
 
 app.use("/api/categories", categories);
 app.use("/api/listings", listings);
@@ -53,7 +59,35 @@ app.use("/api/stats", stats);
 app.use("/api/admin-notifications", adminNotifications);
 app.use("/api/settings", settings);
 app.use("/api/backups", backups);
+app.use('/api/logs', logs);
+app.use('/api/assistant', assistant);
+app.use('/api/moderation', moderation);
 
+
+
+
+app.use(
+  "/api-docs",
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerSpec)
+);
+
+
+
+/**
+ * @swagger
+ * /api/health:
+ *   get:
+ *     summary: Test Swagger
+ *     tags:
+ *       - Test
+ *     responses:
+ *       200:
+ *         description: Swagger fonctionne
+ */
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok', message: 'Server is healthy !' });
+});
 
 
 async function migrateLegacyMessages() {
@@ -158,6 +192,47 @@ async function ensureUserPasswordResetColumns() {
         }
 }
 
+async function ensureListingModerationColumns() {
+        const queryInterface = sequelize.getQueryInterface();
+        const listingColumns = await queryInterface.describeTable('Listings');
+        const { DataTypes } = require('sequelize');
+
+        if (!listingColumns.fraudScore) {
+                await queryInterface.addColumn('Listings', 'fraudScore', {
+                        type: DataTypes.INTEGER,
+                        allowNull: true,
+                        defaultValue: 0,
+                        comment: 'Fraud/risk detection score (0-100)',
+                });
+        }
+
+        if (!listingColumns.flagged) {
+                await queryInterface.addColumn('Listings', 'flagged', {
+                        type: DataTypes.BOOLEAN,
+                        allowNull: false,
+                        defaultValue: false,
+                        comment: 'Flagged for content violations or fraud',
+                });
+        }
+
+        if (!listingColumns.flagReason) {
+                await queryInterface.addColumn('Listings', 'flagReason', {
+                        type: DataTypes.TEXT,
+                        allowNull: true,
+                        comment: 'Reason for flagging (JSON with violations)',
+                });
+        }
+
+        if (!listingColumns.moderationStatus) {
+                await queryInterface.addColumn('Listings', 'moderationStatus', {
+                        type: DataTypes.ENUM('approved', 'flagged', 'blocked'),
+                        allowNull: false,
+                        defaultValue: 'approved',
+                        comment: 'Content moderation status',
+                });
+        }
+}
+
 async function ensureOrderReportColumns() {
         const queryInterface = sequelize.getQueryInterface();
         const orderColumns = await queryInterface.describeTable('Orders');
@@ -193,8 +268,21 @@ async function ensureOrderReportColumns() {
         }
 }
 
+
+// app.js
+
+// Add logging middleware BEFORE routes
+app.use(logRequest);
+
+// Routes
+
+// Error logging middleware AFTER routes
+app.use(logError);
+
+
 // Sync database and start server
 sequelize.sync().then(async () => {
+        await ensureListingModerationColumns();
         await ensureUserPasswordResetColumns();
         await ensureMessagesMessageTypeColumn();
         await ensureOrderReportColumns();

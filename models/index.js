@@ -9,10 +9,9 @@ const Reviews = require('./Reviews');
 const Orders = require('./Orders');
 const Notification = require('./Notification');
 const Message = require('./Message');
-const AdminActivity = require('./AdminActivity');
+const ActivityLog = require('./ActivityLog');
 const MobileSetting = require('./MobileSetting');
 const Backup = require('./Backup');
-const { registerActivityHooks } = require('../utilities/activityLogger');
 
 // Define relationships
 User.hasMany(Listing, { foreignKey: 'user_id' });
@@ -66,9 +65,18 @@ Listing.hasMany(Orders, { foreignKey: 'listing_id' });
 Orders.belongsTo(User, { foreignKey: 'buyer_id' });
 User.hasMany(Orders, { foreignKey: 'buyer_id' });
 
-registerActivityHooks(User, 'user', AdminActivity);
-registerActivityHooks(Listing, 'listing', AdminActivity);
-registerActivityHooks(Reviews, 'review', AdminActivity);
+
+
+
+
+ActivityLog.belongsTo(User, { foreignKey: 'user_id', as: 'User' });
+User.hasMany(ActivityLog, { foreignKey: 'user_id' });
+
+ActivityLog.belongsTo(Listing, { foreignKey: 'listing_id', as: 'Listing' });
+Listing.hasMany(ActivityLog, { foreignKey: 'listing_id' });
+
+ActivityLog.belongsTo(Orders, { foreignKey: 'order_id', as: 'Order' });
+Orders.hasMany(ActivityLog, { foreignKey: 'order_id' });
 
 // Export models and Sequelize instance
 module.exports = {
@@ -82,7 +90,7 @@ module.exports = {
   Notification,
   Message,
   Orders,
-  AdminActivity,
+  ActivityLog,
   MobileSetting,
   Backup,
 };
