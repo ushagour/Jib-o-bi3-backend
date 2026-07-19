@@ -7,7 +7,7 @@ const bcrypt = require("bcrypt");
 const validateWith = require("../middleware/validation");
 const { User } = require('../models');
 const auth = require("../middleware/auth");
-const Logger = require('../utilities/logger');
+const Logger = require('../utilities/Logger');
 const JWT_SECRET = process.env.JWT_SECRET;
 
 if (!JWT_SECRET) {

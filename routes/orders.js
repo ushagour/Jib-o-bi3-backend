@@ -14,10 +14,21 @@ const mapOrders = (orders) => {
   const isArray = Array.isArray(orders);
   const orderList = isArray ? orders : [orders];
   
-  const mapped = orderList.map(order => ({
-    ...order.toJSON(),
-    Listing: order.Listing ? listingMapper(order.Listing) : null,
-  }));
+  const mapped = orderList.map(order => {
+    try {
+      return {
+        ...order.toJSON(),
+        Listing: order.Listing ? listingMapper(order.Listing) : null,
+      };
+    } catch (mapError) {
+      console.error('Error mapping order:', mapError);
+      // Return order without mapped listing if there's an error
+      return {
+        ...order.toJSON(),
+        Listing: order.Listing ? order.Listing.toJSON() : null,
+      };
+    }
+  });
   
   return isArray ? mapped : mapped[0];
 };
@@ -47,7 +58,8 @@ router.get('/', async (req, res) => {
     });
     res.json(mapOrders(orders));
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch orders' });
+    console.error('Error fetching orders:', err);
+    res.status(500).json({ error: 'Failed to fetch orders', details: err.message });
   }
 });
 // Get user-specific orders
@@ -77,7 +89,8 @@ router.get('/my', auth, async (req, res) => {
     });
     res.json(mapOrders(orders));
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch orders' });
+    console.error('Error fetching user orders:', err);
+    res.status(500).json({ error: 'Failed to fetch orders', details: err.message });
   }
 });
 
@@ -113,8 +126,8 @@ router.get('/recent', async (req, res) => {
     });
     res.json(mapOrders(recentOrders));
   } catch (err) {
-    console.log('Error fetching recent orders:', err);
-    res.status(500).json({ error: 'Failed to fetch recent orders' });
+    console.error('Error fetching recent orders:', err);
+    res.status(500).json({ error: 'Failed to fetch recent orders', details: err.message });
   }
 });
 
