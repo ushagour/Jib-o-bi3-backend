@@ -13,6 +13,8 @@ const delay = require("../middleware/delay");
 const listingMapper = require("../mappers/listings");
 const { sequelize, Listing, Image, User, Favorites, Reviews, Category, Orders, Notification } = require("../models");
 const { createListingUpdateNotifications } = require("../utilities/notifications");
+const { validateListingContent } = require("../utilities/contentModeration");
+const { notifyListingClosed, notifyListingReopened, notifyListingSold, notifyListingViewed, notifyListingFavorited, notifyListingExpired, notifyListingReported } = require("../utilities/listingNotifications");
 
 const upload = multer({
   dest: "uploads/",
@@ -108,6 +110,21 @@ router.post(
       if (latitude === 0 || !Number.isFinite(latitude)) latitude = null;
       if (longitude === 0 || !Number.isFinite(longitude)) longitude = null;
 
+      // Validate content for fraud/prohibited content
+      const moderationResult = validateListingContent({
+        title,
+        description
+      });
+
+      // Reject listing if critical violations found (weapons, drugs, minors, sexual)
+      if (moderationResult.hasCriticalViolations) {
+        return res.status(400).json({
+          error: 'This listing contains prohibited content and cannot be created.',
+          violations: moderationResult.violations,
+          fraudScore: moderationResult.fraudScore
+        });
+      }
+
       // Create the listing
       const listing = await Listing.create({
         title,
@@ -121,6 +138,10 @@ router.post(
         carYear: carYear || null,
         latitude,
         longitude,
+        fraudScore: moderationResult.fraudScore,
+        flagged: moderationResult.fraudScore > 50,
+        flagReason: moderationResult.violations.length > 0 ? JSON.stringify(moderationResult.violations) : null,
+        moderationStatus: moderationResult.fraudScore > 50 ? 'flagged' : 'approved'
       });
 
       // Handle images if provided
@@ -173,6 +194,26 @@ router.put(
         carModel: req.body.carModel !== undefined ? req.body.carModel : existingListing.carModel,
         carYear: req.body.carYear !== undefined ? req.body.carYear : existingListing.carYear,
       };
+
+      // Validate content for fraud/prohibited content if title or description changed
+      if (req.body.title || req.body.description) {
+        const moderationResult = validateListingContent(updatedListing);
+        
+        // Reject update if critical violations found
+        if (moderationResult.hasCriticalViolations) {
+          return res.status(400).json({
+            error: 'The updated listing contains prohibited content and cannot be saved.',
+            violations: moderationResult.violations,
+            fraudScore: moderationResult.fraudScore
+          });
+        }
+
+        // Update moderation fields
+        updatedListing.fraudScore = moderationResult.fraudScore;
+        updatedListing.flagged = moderationResult.fraudScore > 50;
+        updatedListing.flagReason = moderationResult.violations.length > 0 ? JSON.stringify(moderationResult.violations) : null;
+        updatedListing.moderationStatus = moderationResult.fraudScore > 50 ? 'flagged' : 'approved';
+      }
 
       const changes = {
         title: updatedListing.title !== existingListing.title,
@@ -732,14 +773,12 @@ router.put("/:id/close", auth, async (req, res) => {
       archived_at: new Date(),
     });
 
-    // Create notification for the seller
-    await Notification.create({
-      user_id: listing.user_id,
-      type: "listing_update",
-      title: "Listing Closed",
-      content: `Your listing "${listing.title}" has been closed.`,
-      listing_id: listing.id,
-    });
+    // Fetch the user to get their language preference
+    const user = await User.findByPk(listing.user_id);
+    const userLanguage = user?.language || 'en';
+
+    // Create translation-aware notification
+    await notifyListingClosed(listing.id, listing.title, listing.user_id, userLanguage);
 
     res.status(200).json({
       message: "Listing closed successfully.",
@@ -793,14 +832,12 @@ router.put("/:id/reopen", auth, async (req, res) => {
       archived_at: null,
     });
 
-    // Create notification for the seller
-    await Notification.create({
-      user_id: listing.user_id,
-      type: "listing_update",
-      title: "Listing Reopened",
-      content: `Your listing "${listing.title}" has been reopened and is now available for buyers.`,
-      listing_id: listing.id,
-    });
+    // Fetch the user to get their language preference
+    const user = await User.findByPk(listing.user_id);
+    const userLanguage = user?.language || 'en';
+
+    // Create translation-aware notification
+    await notifyListingReopened(listing.id, listing.title, listing.user_id, userLanguage);
 
     res.status(200).json({
       message: "Listing reopened successfully.",
