@@ -9,7 +9,6 @@ CREATE TABLE IF NOT EXISTS Categories (
   updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Users Table
 CREATE TABLE IF NOT EXISTS Users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT UNIQUE,
@@ -30,6 +29,8 @@ CREATE TABLE IF NOT EXISTS Users (
   createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
   updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+
 
 -- Listings Table
 CREATE TABLE IF NOT EXISTS Listings (
@@ -130,36 +131,42 @@ CREATE TABLE IF NOT EXISTS Notifications (
   FOREIGN KEY (listing_id) REFERENCES Listings(id) ON DELETE CASCADE
 );
 
--- MobileSettings Table
-CREATE TABLE IF NOT EXISTS MobileSettings (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  key TEXT NOT NULL UNIQUE,
-  title TEXT NOT NULL,
-  subtitle TEXT,
-  value TEXT,
-  value_type TEXT CHECK(value_type IN ('text', 'number', 'boolean', 'json', 'image')) DEFAULT 'text',
-  image_url TEXT,
-  feature_enabled INTEGER NOT NULL DEFAULT 1,
-  group_name TEXT NOT NULL DEFAULT 'general',
-  sort_order INTEGER NOT NULL DEFAULT 0,
-  updated_by INTEGER,
-  createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (updated_by) REFERENCES Users(id) ON DELETE SET NULL
-);
+
 
 -- AdminActivities Table
-CREATE TABLE IF NOT EXISTS AdminActivities (
+CREATE TABLE IF NOT EXISTS ActivityLogs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  entity TEXT CHECK(entity IN ('user', 'listing', 'review')) NOT NULL,
-  action TEXT CHECK(action IN ('create', 'update', 'delete')) NOT NULL,
-  entityId INTEGER,
-  title TEXT NOT NULL,
-  content TEXT NOT NULL,
-  metadata TEXT,
-  createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+  
+  -- Log classification
+  type TEXT CHECK(type IN ('info', 'warning', 'error', 'success', 'debug')) NOT NULL DEFAULT 'info',
+  category TEXT CHECK(category IN ('user', 'listing', 'order', 'system', 'auth', 'admin')) NOT NULL,
+  
+  -- Log content
+  message TEXT NOT NULL,
+  details JSON,  -- Store additional data as JSON
+  
+  -- Related entities (for relationship queries)
+  user_id INTEGER,
+  listing_id INTEGER,
+  order_id INTEGER,
+  
+  -- Metadata
+  ip_address TEXT,
+  user_agent TEXT,
+  session_id TEXT,
+  
+  -- Read status (for admin notification)
+  is_read BOOLEAN DEFAULT 0,
+  read_at DATETIME,
+  
+  -- Timestamps
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  
+  FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE SET NULL,
+  FOREIGN KEY (listing_id) REFERENCES Listings(id) ON DELETE SET NULL,
+  FOREIGN KEY (order_id) REFERENCES Orders(id) ON DELETE SET NULL
 );
+
 
 -- Backups Table
 CREATE TABLE IF NOT EXISTS Backups (
